@@ -280,6 +280,9 @@ self_check:
          facts' own (facts say 学生们, passage says "a student"); a claim about what did
          NOT happen; a time qualifier the facts do not give ("today").
        - If you cannot name the specific added detail, do NOT report an issue.
+       - Chinese names and places are normally transliterated into English
+         (黔东南 → QianDongNan, 李雨 → Li Yu, 贵州 → Guizhou). A transliteration of a name
+         that appears in the fact list is SUPPORTED — do not flag it as an invented name.
        - Judge the English paragraphs. The Chinese paragraphs are translations of them:
          never report a Chinese sentence on its own. If the English side of a pair is
          supported, the Chinese side is supported too.

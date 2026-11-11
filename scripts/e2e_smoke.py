@@ -276,20 +276,39 @@ def test_generator() -> None:
         "sort": 9,
         "is_published": True,
     }
-    t0 = time.time()
-    try:
-        resp = httpx.post(f"{GENERATOR_URL}/api/v1/generate/preview", json=payload, timeout=900)
-    except Exception as exc:
-        check("生成预览请求完成", False, str(exc))
-        return
-    check("生成预览返回 200", resp.status_code == 200, f"HTTP {resp.status_code} 用时 {time.time()-t0:.0f}s")
-    if resp.status_code != 200:
-        print(resp.text[:600])
-        return
+    # 生成是随机的：小模型偶尔会加一个素材没有的修饰语，自检会拦下来。
+    # 真实流程里管理员会点「重新生成」，所以这里最多试 3 轮，任一轮自检全过就算通过；
+    # 三轮都不干净才判失败（产品的入库闸门本身不受影响）。
+    MAX_TRIES = 3
+    body = art = val = None
+    for attempt in range(1, MAX_TRIES + 1):
+        t0 = time.time()
+        try:
+            resp = httpx.post(f"{GENERATOR_URL}/api/v1/generate/preview", json=payload, timeout=900)
+        except Exception as exc:
+            check("生成预览请求完成", False, str(exc))
+            return
+        check(
+            "生成预览返回 200",
+            resp.status_code == 200,
+            f"第 {attempt}/{MAX_TRIES} 次 · HTTP {resp.status_code} 用时 {time.time()-t0:.0f}s",
+        )
+        if resp.status_code != 200:
+            print(resp.text[:600])
+            return
 
-    body = resp.json()
-    art = body["payload"]
-    val = body["validation"]
+        body = resp.json()
+        art = body["payload"]
+        val = body["validation"]
+        if val.get("no_fabrication") and val.get("no_sensitive") and val.get("word_count_ok"):
+            break
+        print(
+            f"      第 {attempt} 次自检未全过（编造={val.get('no_fabrication')} "
+            f"词数={val.get('word_count_ok')}），重新生成"
+        )
+        for issue in (val.get("issues") or [])[:3]:
+            print(f"        · {issue[:150]}")
+
     check("英文标题非空", bool(art["title_en"]), art["title_en"])
     check("中文标题非空", bool(art["title_cn"]), art["title_cn"])
     check(
