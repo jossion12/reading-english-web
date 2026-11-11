@@ -42,6 +42,8 @@ REQUIRED: dict[str, list[str]] = {
         "SEARXNG_BASE_URL",
     ],
     "frontend": ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"],
+    # 数据底座只有 Supabase 密钥，没有 LLM
+    "db": ["SUPABASE_URL"],
 }
 
 #: 哪些键必须是公网地址（不能指向本机）
@@ -68,6 +70,8 @@ def kind_of(path: Path) -> str:
         return "frontend"
     if "crawler" in text or "material" in text:
         return "crawler"
+    if "db-supabase" in text or "db_supabase" in text:
+        return "db"
     return "generate"
 
 
@@ -130,11 +134,25 @@ def main() -> int:
     if provider == "ollama" and kind != "frontend":
         notes.append("当前仍指向本机 Ollama（开发环境配置）")
 
-    # 前端不能出现 service_role
+    # 前端不能出现 service_role（只看真正生效的配置行，注释里的说明文字不算）
     if kind == "frontend":
-        raw = path.read_text(encoding="utf-8")
-        if "service_role" in raw or re.search(r"sb_secret_", raw):
+        effective = "\n".join(
+            line for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        )
+        if "service_role" in effective or re.search(r"sb_secret_", effective):
             problems.append("前端配置里出现了 service_role / sb_secret_ 密钥，只读前端绝不能带写权限密钥")
+
+    # 数据库底座：只需要 Supabase 密钥，不该出现 LLM 配置
+    if kind == "db":
+        if "LLM_API_KEY" in env:
+            problems.append("数据底座配置里不需要 LLM_API_KEY，别把模型密钥放进来")
+        for key in ("SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY"):
+            if env.get(key):
+                print(f"  [OK]   {key} = {mask(env[key])}")
+                break
+        else:
+            notes.append("没有 publishable/anon 键：verify_rls.py 需要它来验证「anon 读不到 source_log」")
 
     for n in notes:
         print(f"  [提示] {n}")

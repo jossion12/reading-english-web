@@ -137,6 +137,9 @@ grant all on table public.articles  to service_role;
 -- anon：禁止 SELECT / INSERT / UPDATE / DELETE
 --   不建立任何 anon 策略，配合上面的 revoke 实现「完全不可见」；
 --   同时把 anon 显式列进策略黑名单，便于后续审计时一眼看懂意图。
+-- 先 drop 再 create：PostgreSQL 的 CREATE POLICY 没有 IF NOT EXISTS，
+-- 不这么做的话重复执行整份脚本会在这里报错中断。
+drop policy if exists "anon_no_access_source_log" on public.source_log;
 create policy "anon_no_access_source_log"
   on public.source_log
   for select
@@ -144,6 +147,7 @@ create policy "anon_no_access_source_log"
   using (false);
 
 -- 管理员：全部读写
+drop policy if exists "admin_all_source_log" on public.source_log;
 create policy "admin_all_source_log"
   on public.source_log
   for all
@@ -155,6 +159,7 @@ create policy "admin_all_source_log"
 -- anon：仅允许 SELECT，且只暴露已发布文章
 grant select on table public.articles to anon;
 
+drop policy if exists "anon_select_published_articles" on public.articles;
 create policy "anon_select_published_articles"
   on public.articles
   for select
@@ -162,6 +167,7 @@ create policy "anon_select_published_articles"
   using (is_published = true);
 
 -- 管理员：全部读写（含未发布草稿）
+drop policy if exists "admin_all_articles" on public.articles;
 create policy "admin_all_articles"
   on public.articles
   for all

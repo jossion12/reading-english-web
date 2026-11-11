@@ -88,10 +88,17 @@ supabase db push
 **方式 B：Dashboard 网页**
 
 Project Settings → SQL Editor → 新建查询，把
-`Reading-DB-Supabase/supabase/migrations/20261111140000_init_reading_schema.sql`
-整份贴进去执行。
+`Reading-DB-Supabase/deploy/online_setup.sql`
+整份贴进去执行（**建表 + RLS 策略 + 种子数据一次搞定**，脚本可重复执行）。
+
+> 不想手工粘贴的话，也可以只贴迁移文件
+> `Reading-DB-Supabase/supabase/migrations/20261111140000_init_reading_schema.sql`，
+> 种子数据单独执行 `supabase/seed.sql`。
 
 迁移会建两张表 `source_log` / `articles`、索引、外键，以及 RLS 策略 —— 严格两表，没有第三张。
+
+> **灌完表一定要验证**：在线库没建表时，REST 会返回 `PGRST205 Could not find the table`，
+> 前端会一片空白。跑一次 `py -3.12 scripts/check_prod_connectivity.py` 即可确认。
 
 ### 1.4 可选：灌演示数据
 
@@ -133,33 +140,55 @@ sudo apt update && sudo apt install -y python3.12 python3.12-venv docker.io
 
 ### 2.2 装依赖、配环境变量
 
+开发与生产用**同一个服务、同一份代码**，靠 `APP_ENV` 切换读哪份配置：
+
+| `APP_ENV` | 读的配置 | 用途 |
+| --- | --- | --- |
+| 不设（默认） | `.env` | 本地开发（Ollama + 本地 Docker Supabase） |
+| `production` | `.env.production` | 生产（DeepSeek + 在线 Supabase） |
+
 ```bash
 cd /opt/reading/Reading-Article-Generate-Service
 python3.12 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
-cp .env.production.example .env
-vi .env            # 填 DeepSeek key + 在线 Supabase URL / service_role
+cp .env.production.example .env.production
+vi .env.production     # 填 DeepSeek key + 在线 Supabase URL / service_role
 ```
 
 ```bash
 cd /opt/reading/Reading-Material-Crawler-Service
 python3.12 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
-cp .env.production.example .env
-vi .env
+cp .env.production.example .env.production
+vi .env.production
+```
+
+启动后用 `/health` 里的 `env_file` 字段确认没起错配置：
+
+```bash
+curl -s http://127.0.0.1:8010/health
+# {"env_file":".env.production","llm_model":"deepseek-flash","supabase_url":"https://<ref>.supabase.co",...}
 ```
 
 ### 2.3 预检配置
 
-仓库根目录带一个预检脚本，会指出漏改的本地地址、占位符和缺失的密钥：
+仓库根目录带两个脚本：
 
 ```bash
 cd /opt/reading
-py -3.12 scripts/check_prod_config.py Reading-Article-Generate-Service/.env
-py -3.12 scripts/check_prod_config.py Reading-Material-Crawler-Service/.env
+# ① 静态预检：漏改的本地地址、占位符、缺失的密钥、下线的老模型名
+py -3.12 scripts/check_prod_config.py Reading-Article-Generate-Service/.env.production
+py -3.12 scripts/check_prod_config.py Reading-Material-Crawler-Service/.env.production
+py -3.12 scripts/check_prod_config.py Reading-Web-Frontend/.env.production
+py -3.12 scripts/check_prod_config.py Reading-DB-Supabase/.env.production
+
+# ② 连通性自检：拿真实密钥打一次线上接口（只读，不写库）
+py -3.12 scripts/check_prod_connectivity.py
 ```
 
-全部输出 `[OK]` 才算通过。
+`check_prod_connectivity.py` 会实测：在线 Supabase 的表在不在、anon 能不能读 articles、
+anon 读不读得到 source_log（应该读不到）、DeepSeek 密钥与模型名有效不有效、能不能真的回一句话。
+输出全 `[PASS]` 才算通过。
 
 ### 2.4 一起部署 SearXNG
 
@@ -192,6 +221,8 @@ ExecStart=/opt/reading/Reading-Article-Generate-Service/.venv/bin/uvicorn app.ma
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+# 关键：让服务读 .env.production（不设就读 .env）
+Environment=APP_ENV=production
 
 [Install]
 WantedBy=multi-user.target

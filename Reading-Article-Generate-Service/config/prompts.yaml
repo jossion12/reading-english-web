@@ -248,9 +248,12 @@ self_check:
 
     ## The material's facts (the ground truth for what the material states)
     {{fact_list}}
-    Use this list to decide what the material supports. A passage detail that matches
-    one of these facts is supported — do not flag it, even if the passage words it
-    differently.
+    This list is the yardstick. A passage sentence that paraphrases one of these facts
+    is SUPPORTED, even when it uses different words:
+      F3 送上课本 → "She gave textbooks to the student" is supported
+      F5 不因天气缺课 → "Their education remains safe" is supported
+      F2 翻越两座山头 → "Her route went across two mountain tops" is supported
+    Only a concrete detail that NO listed fact supports counts as a fabrication.
 
     ## Candidate passage
     English title: {{title_en}}
@@ -266,21 +269,21 @@ self_check:
        Still report your own count as `word_count`, but do NOT list word-count problems
        in `issues`.
     2. no_fabrication — does the passage state any fact that is NOT supported by the
-       material above? Use these rules for this check:
-       - Flag it ONLY when the passage adds or changes something the material does not
-         support: a specific count ("一本重要的课本" where the material says only "课本"),
-         a new name / place / date / number, an extra detail (wind, ice, a school name),
-         a modifier the material does not use ("new textbooks" for 课本), a reason or a
-         cause the material does not give ("the student was sick"), a starting point
-         the material does not mention ("she left her school"), or a count narrower
-         than the material's own (材料说学生们, 文章写 a student).
-       - Do NOT flag the passage merely because it words the same fact differently
-         (material "two mountain tops" vs passage "two hills" is a translation choice).
-         Flag only what the passage ADDS.
-       - Do NOT flag number agreement when the material leaves the number unspecified.
-         Chinese source wording such as 学生家中 or 课本 does not fix a singular or plural
-         form; translating it either way is fine.
-       - Do NOT flag the passage for OMITTING a detail the material mentions. Omission
+       fact list above? Use these rules for this check:
+       - The fact list is the ground truth. A sentence that paraphrases a listed fact is
+         SUPPORTED, even when it uses different words. Do NOT flag it.
+       - Flag ONLY a concrete addition that NO listed fact supports: a new name, place,
+         date or number; an extra detail (wind, ice, a school name); a modifier the
+         facts do not use ("new textbooks" for 课本, "distinct" for 两座山头); a reason or
+         cause the facts do not give ("the student was sick"); a starting point the
+         facts do not mention ("she left her school"); a count narrower than the
+         facts' own (facts say 学生们, passage says "a student"); a claim about what did
+         NOT happen; a time qualifier the facts do not give ("today").
+       - If you cannot name the specific added detail, do NOT report an issue.
+       - Judge the English paragraphs. The Chinese paragraphs are translations of them:
+         never report a Chinese sentence on its own. If the English side of a pair is
+         supported, the Chinese side is supported too.
+       - Do NOT flag the passage for OMITTING a detail the facts mention. Omission
          is not fabrication.
        - Do not report a problem you are not sure about. If the material is empty
          (evergreen passage), judge instead whether the passage stays on stable, generally
@@ -290,12 +293,11 @@ self_check:
        politics, religion, sexual content, and other material unsuitable for a 12-year-old?
 
     ## How to write issues
-    Write every issue as ONE short imperative instruction of at most 30 words that gives
-    the EXACT sentence to delete from the passage, e.g.
-      "Delete this sentence: 'She carried some new textbooks with her.'"
-    If the problem is one word inside a sentence, quote that whole sentence and name
-    the word to remove, e.g.
-      "In 'She carried some new textbooks with her.', remove 'new'."
+    Write every issue as ONE instruction of at most 30 words naming the exact text to
+    remove, e.g.
+      "Delete this sentence: 'The journey continued through the cold wind.'"
+      "In 'Her route went across two distinct mountain tops.', remove 'distinct'."
+    When only ONE word is wrong, name that word instead of the whole sentence.
     No explanations, no hedging, no "acceptable", no "though not strictly a fabrication".
 
     ## Before you report an issue

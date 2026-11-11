@@ -207,9 +207,14 @@ Reading-English-Web/
 
 几个部署前值得知道的事：
 
+- **开发/生产两套配置并存，靠 `APP_ENV` 切换**：后端默认读 `.env`（本机 Ollama + 本地 Docker Supabase），
+  `APP_ENV=production` 时读 `.env.production`（DeepSeek + 在线 Supabase）。
+  `/health` 里的 `env_file` 字段会告诉你当前到底加载了哪份
 - **DeepSeek 的模型名以官网为准**：现役是 `deepseek-flash` / `deepseek-v4-pro`，
   旧的 `deepseek-chat` 已下线；base 用 `https://api.deepseek.com`。
   另外它的**思考模式默认是开的**，模板里已用 `LLM_THINK=false` 显式关掉
+- **上线前跑两次自检**：`check_prod_config.py`（静态：占位符/本地地址/老模型名/前端混入 service_role）
+  与 `check_prod_connectivity.py`（真实打一次线上接口：表结构在不在、RLS 是否隔离、DeepSeek 能否回话）
 - **密钥不写死在代码里**：`verify_rls.py` 与 `e2e_smoke.py` 改成从环境变量 / `.env` 读，
   根 `.gitignore` 排除了所有 `.env`、`node_modules`、`dist`、`.venv`
 - **前端只直连 Supabase**，不请求后端服务，所以部署不需要 CORS 配置，后端可以一直留在内网

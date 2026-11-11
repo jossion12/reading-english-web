@@ -52,12 +52,32 @@ supabase stop
 ## 迁移文件
 
 - `supabase/migrations/20261111140000_init_reading_schema.sql` —— 建表、索引、外键、RLS 策略、管理员函数
+- `deploy/online_setup.sql` —— **在线托管版一键脚本**：建表 + RLS + 种子数据合成一份，
+  粘到 Supabase 控制台 → SQL Editor 执行即可（可重复执行）
+
+## 在线托管版
+
+```powershell
+# 方式 A：CLI（可重复执行）
+supabase link --project-ref <ref>
+cd Reading-DB-Supabase; supabase db push
+
+# 方式 B：控制台 SQL Editor —— 整份粘贴 deploy\online_setup.sql
+```
+
+灌完表必须验证（表不存在时 REST 会报 `PGRST205`，前端一片空白）：
+
+```powershell
+py -3.12 scripts\check_prod_connectivity.py
+```
 
 ## 权限自测
 
 ```powershell
 py -3.12 -m pip install httpx     # 首次，自测脚本用到 httpx
 py -3.12 scripts\verify_rls.py
+# 在线版：指定配置文件
+py -3.12 scripts\verify_rls.py --env Reading-DB-Supabase\.env.production
 ```
 
 覆盖：anon 只能读已发布文章 / 读不到 `source_log` / 写入被拒 / service_role 全权 / 外键生效。

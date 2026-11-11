@@ -105,10 +105,13 @@ def get_library() -> SourceLibrary:
 # ================================================================== 基础信息 ===
 @app.get("/health")
 async def health() -> dict[str, Any]:
+    from app.config import _env_file_name
+
     searx = await SearXNGClient().health()
     return {
         "ok": True,
         "service": "reading-material-crawler-service",
+        "env_file": _env_file_name(),
         "llm_provider": settings.llm_provider,
         "llm_model": settings.llm_model,
         "crawler_mode": settings.crawler_mode,

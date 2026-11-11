@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -10,11 +11,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _env_file_name() -> str:
+    """选配置文件：APP_ENV=production 读 .env.production，否则读 .env。
+
+    这样开发（.env 指向本机 Ollama + 本地 Docker Supabase）与生产
+    （.env.production 指向 DeepSeek + 在线 Supabase）可以并存，切换只改一个环境变量。
+    """
+    app_env = os.environ.get("APP_ENV", "").strip().lower()
+    return ".env.production" if app_env in {"production", "prod"} else ".env"
+
+
 class Settings(BaseSettings):
     """Reading-Material-Crawler-Service 运行配置。"""
 
     model_config = SettingsConfigDict(
-        env_file=(BASE_DIR / ".env"),
+        env_file=(BASE_DIR / _env_file_name()),
         env_file_encoding="utf-8",
         extra="ignore",
     )

@@ -58,9 +58,12 @@ async def _generation_error_handler(_request, exc: GenerationError):  # type: ig
 # ---------------------------------------------------------------- 基础信息 ---
 @app.get("/health")
 def health() -> dict[str, Any]:
+    from app.config import _env_file_name
+
     return {
         "ok": True,
         "service": "reading-article-generate-service",
+        "env_file": _env_file_name(),
         "llm_provider": settings.llm_provider,
         "llm_model": settings.llm_model,
         "supabase_url": settings.supabase_url,
