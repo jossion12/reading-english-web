@@ -6,8 +6,19 @@
  */
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+/**
+ * 环境变量清洗：去掉 BOM 与首尾空白。
+ *
+ * Windows 上用 PowerShell 管道把密钥写进 GitHub Secrets 时，很容易带上一个
+ * U+FEFF（BOM）。它在 JS 字符串里是合法字符，但浏览器建 HTTP 头时会报
+ * "String contains non ISO-8859-1 code point"，整页读不到数据 —— 这里统一兜住。
+ */
+function clean(value: string | undefined): string {
+  return (value ?? "").replace(/^\uFEFF/, "").trim();
+}
+
+const url = clean(import.meta.env.VITE_SUPABASE_URL as string | undefined);
+const anonKey = clean(import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
 
 export const isConfigured = Boolean(url && anonKey);
 
