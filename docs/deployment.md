@@ -240,17 +240,22 @@ export SUPABASE_ANON_KEY=<anon 键>
 
 ### 3.1 推送代码
 
+本地仓库已经初始化并提交好了（仓库根有 `.git`，已有一次提交），你只需要在
+GitHub 上建一个**空仓库**（不要勾选 README / .gitignore / license），然后：
+
 ```powershell
 cd <仓库根目录>
-git init
-git add .
-git commit -m "feat: 阅读英文平台初始版本"
-git branch -M main
 git remote add origin https://github.com/<user>/<repo>.git
+git branch -M main
 git push -u origin main
 ```
 
 仓库根的 `.gitignore` 已经排除所有 `.env`、`node_modules`、`dist`、`.venv`，密钥不会被推上去。
+推送前可以自查一遍：
+
+```powershell
+git ls-files | Select-String -Pattern '\.env$|node_modules|\.venv'   # 应该没有输出
+```
 
 ### 3.2 配 Actions Secrets
 
