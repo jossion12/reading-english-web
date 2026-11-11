@@ -1,0 +1,63 @@
+# ===========================================================================
+# 内容分类配置（PRD §2.1 / §2.2）
+# theme 大类 / sub_theme 子话题 / style 文体 / level 难度 / color_tag 标签色
+# color_tag 必须与 articles.color_tag 的 #xxxxxx 格式一致
+# ===========================================================================
+
+levels:
+  L1:
+    label: L1
+    word_range: [80, 120]
+    description: 短句为主，极少从句
+  L2:
+    label: L2
+    word_range: [120, 180]
+    description: 少量定语/状语从句，对标中考B篇
+  L3:
+    label: L3
+    word_range: [180, 240]
+    description: 复合句增多，对标中考C/D篇
+
+styles:
+  记叙文:
+    description: 以时间顺序讲述一件事
+    default_color_tag: "#E8F1FF"
+  说明文:
+    description: 解释一个事物或过程
+    default_color_tag: "#E3F7EC"
+  应用文:
+    description: 书信、通知、邀请等实用文本
+    default_color_tag: "#F0E9FF"
+  议论文:
+    description: 就一个话题表达观点并论证
+    default_color_tag: "#FFF4E0"
+
+themes:
+  人与自我:
+    color_tag: "#E8F1FF"
+    sub_themes:
+      - 成长与自律
+      - 坚持与责任
+      - 情绪与自我认知
+      - 兴趣与天赋
+  人与社会:
+    color_tag: "#FFF4E0"
+    sub_themes:
+      - 邻里互助
+      - 公共空间
+      - 规则与公德
+      - 传统与文化
+  人与自然:
+    color_tag: "#E3F7EC"
+    sub_themes:
+      - 水循环
+      - 气候变化与日常选择
+      - 生物与栖息地
+      - 能源与节约
+  人与科技:
+    color_tag: "#F0E9FF"
+    sub_themes:
+      - 校园科学节
+      - 科学观察与记录
+      - 人工智能与生活
+      - 探索与发明

@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reading-English-Web · 流程图与时序图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f7f5f0;
+    --card:#ffffff;
+    --line:#e9e3d6;
+    --line-soft:#f0ece2;
+    --ink:#14171e;
+    --ink2:#3a4256;
+    --muted:#7c7a72;
+    --primary:#2f6f5e;
+    --primary-soft:rgba(47,111,94,.10);
+    --warm:#c97b3f;
+    --warm-soft:rgba(201,123,63,.10);
+    --radius:16px;
+    --sans:"Outfit","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif;
+    --mono:"JetBrains Mono","SFMono-Regular",Consolas,monospace;
+    --serif:"DM Serif Display","Songti SC","SimSun",serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink2);
+    font-family:var(--sans);
+    font-size:14.5px;
+    line-height:1.62;
+    overflow-x:hidden;
+  }
+  body::before,body::after{
+    content:"";position:fixed;z-index:0;pointer-events:none;border-radius:50%;
+  }
+  body::before{top:-140px;right:-100px;width:460px;height:460px;
+    background:radial-gradient(circle,rgba(47,111,94,.055),transparent 70%)}
+  body::after{bottom:-160px;left:-120px;width:460px;height:460px;
+    background:radial-gradient(circle,rgba(201,123,63,.055),transparent 70%)}
+  .wrap{position:relative;z-index:1;max-width:1024px;margin:0 auto;padding:0 24px}
+
+  /* ---------- hero ---------- */
+  header{padding:56px 0 8px}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:7px;
+    font:500 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+    color:var(--primary);background:var(--primary-soft);
+    padding:6px 11px;border-radius:999px;
+  }
+  h1{
+    font-family:var(--serif);font-weight:400;font-size:34px;line-height:1.22;
+    letter-spacing:-.005em;color:var(--ink);margin:18px 0 0;
+  }
+  .lead{margin:12px 0 0;max-width:62ch;font-size:15px;color:var(--ink2)}
+  .facts{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:10px;margin:26px 0 0;padding:0;list-style:none;
+  }
+  .facts li{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:11px 13px;box-shadow:0 2px 8px rgba(0,0,0,.035);
+  }
+  .facts b{display:block;font:600 19px/1.2 var(--sans);color:var(--ink)}
+  .facts span{display:block;margin-top:2px;font-size:12px;color:var(--muted)}
+
+  /* ---------- sections ---------- */
+  section{padding:46px 0 0}
+  .sec-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .sec-head svg{width:19px;height:19px;color:var(--primary);flex:none}
+  h2{
+    font-family:var(--serif);font-weight:400;font-size:23px;line-height:1.3;
+    color:var(--ink);margin:0;
+  }
+  .sec-sub{margin:7px 0 0;font-size:13.5px;color:var(--muted);max-width:72ch}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:0 4px 16px -2px rgba(0,0,0,.05);
+  }
+  .pad{padding:18px 20px}
+  .fig-wrap{margin-top:16px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .fig-wrap svg{display:block;width:100%;height:auto;min-width:760px}
+  .fig-wrap.tight svg{min-width:680px}
+  #seq svg{min-width:1040px}
+
+  /* ---------- flow chain ---------- */
+  .flow{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+    gap:14px;margin-top:16px;
+  }
+  .step{
+    position:relative;background:var(--card);border:1px solid var(--line);
+    border-radius:13px;padding:11px 12px 12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.035);
+    transition:transform .2s ease,box-shadow .2s ease;
+  }
+  .step:hover{transform:translateY(-2px);box-shadow:0 6px 16px -4px rgba(0,0,0,.10)}
+  .step::after{
+    content:"";position:absolute;right:-12px;top:50%;width:9px;height:9px;
+    border-top:1.6px solid #cdc5b3;border-right:1.6px solid #cdc5b3;
+    transform:translateY(-50%) rotate(45deg);
+  }
+  .step:last-child::after{display:none}
+  .step .n{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:21px;height:19px;padding:0 5px;border-radius:6px;
+    background:var(--primary-soft);color:var(--primary);
+    font:600 11px/1 var(--mono);
+  }
+  .step b{display:block;margin-top:7px;font:600 13px/1.42 var(--sans);color:var(--ink)}
+  .step small{display:block;margin-top:4px;font-size:11.5px;line-height:1.48;color:var(--muted)}
+  .step.loop{border-style:dashed;border-color:rgba(201,123,63,.55);background:var(--warm-soft)}
+  .step.loop .n{background:rgba(201,123,63,.18);color:#a9632c}
+  .step.loop::after{border-color:#d9b58f}
+  .loopnote{
+    display:flex;gap:10px;align-items:flex-start;margin-top:12px;
+    padding:11px 14px;border-radius:12px;border:1px dashed rgba(201,123,63,.5);
+    background:var(--warm-soft);font-size:12.8px;color:#8c5628;
+  }
+  .loopnote svg{width:16px;height:16px;flex:none;margin-top:2px}
+
+  /* ---------- table ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line-soft)}
+  th{font:600 11.5px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  tbody tr:last-child td{border-bottom:none}
+  td code{font:500 12px/1.5 var(--mono);color:var(--primary);background:var(--primary-soft);padding:1px 6px;border-radius:5px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font:500 11.5px/1.5 var(--sans)}
+  .pill.no{background:rgba(220,38,38,.09);color:#b42318}
+  .pill.ro{background:var(--primary-soft);color:var(--primary)}
+  .pill.rw{background:rgba(201,123,63,.13);color:#a9632c}
+
+  /* ---------- mechanism grid ---------- */
+  .mech{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:14px;margin-top:16px}
+  .mech .card{padding:15px 16px}
+  .mech h3{display:flex;align-items:center;gap:8px;margin:0 0 9px;font:600 14px/1.3 var(--sans);color:var(--ink)}
+  .mech h3 svg{width:16px;height:16px;color:var(--primary);flex:none}
+  .mech dl{margin:0;display:grid;grid-template-columns:78px 1fr;row-gap:7px;column-gap:12px;font-size:12.6px}
+  .mech dt{color:var(--muted)}
+  .mech dd{margin:0;color:var(--ink2)}
+
+  /* ---------- legend ---------- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:9px;height:9px;border-radius:3px;background:var(--primary)}
+  .dot.warm{background:var(--warm)}
+  .dot.dash{background:linear-gradient(90deg,var(--warm) 55%,transparent 55%);background-size:6px 9px}
+  .dot.soft{background:#ddd6c6}
+
+  footer{padding:44px 0 56px;color:var(--muted);font-size:12.5px}
+  footer code{font:500 12px/1.5 var(--mono);color:var(--ink2)}
+  @media (max-width:768px){
+    h1{font-size:27px}
+    h2{font-size:20px}
+    .wrap{padding:0 18px}
+    header{padding:38px 0 4px}
+    section{padding:38px 0 0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+      系统架构说明
+    </span>
+    <h1>Reading-English-Web：<br />整体流程图与时序图</h1>
+    <p class="lead">
+      四个子项目串成一条流水线 —— 采集服务把新闻变成「素材梗概」，生成服务把梗概变成「双语泛读短文」，
+      两者写入 Supabase 的两张表，学生前端只拿 publishable 密钥读已发布文章。
+      下面按「组件拓扑 → 两条内部流程 → 端到端时序」三层拆开。
+    </p>
+    <ul class="facts">
+      <li><b>4</b><span>子项目，一条流水线</span></li>
+      <li><b>2</b><span>张业务表 + RLS 隔离</span></li>
+      <li><b>74</b><span>条单元测试全绿</span></li>
+      <li><b>31</b><span>步端到端时序</span></li>
+    </ul>
+  </header>
+
+  <!-- ============ 1. 组件拓扑 ============ -->
+  <section>
+    <div class="sec-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+      <h2>一、组件拓扑与数据流</h2>
+    </div>
+    <p class="sec-sub">
+      实线是控制流，虚线是调用本机 LLM。绿色标签是写入/读出的数据表。
+      注意两条写入路径都指向同一个数据底座，而前端只以 anon 身份读取 —— 这是整个系统的权限核心。
+    </p>
+    <div class="card pad">
+      <div class="fig-wrap" id="arch"></div>
+      <div class="legend">
+        <span><i class="dot"></i>数据流（写入 / 读取）</span>
+        <span><i class="dot dash"></i>本机 LLM 调用</span>
+        <span><i class="dot soft"></i>浏览器本地</span>
+      </div>
+    </div>
+
+    <div class="card pad" style="margin-top:14px">
+      <table>
+        <thead>
+          <tr><th style="width:30%">角色</th><th style="width:35%">source_log（素材梗概）</th><th>articles（双语文章）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>anon</code><br /><span style="color:var(--muted);font-size:12px">前端 publishable key</span></td>
+            <td><span class="pill no">完全禁止 · HTTP 401</span></td>
+            <td><span class="pill ro">仅 SELECT</span><br /><span style="color:var(--muted);font-size:12px">且只暴露 <code>is_published = true</code></span></td>
+          </tr>
+          <tr>
+            <td><code>authenticated</code> + 管理员邮箱</td>
+            <td><span class="pill rw">全读写</span></td>
+            <td><span class="pill rw">全读写（含未发布草稿）</span></td>
+          </tr>
+          <tr>
+            <td><code>service_role</code><br /><span style="color:var(--muted);font-size:12px">两个后端服务</span></td>
+            <td><span class="pill rw">全读写</span></td>
+            <td><span class="pill rw">全读写</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 2. 采集流程 ============ -->
+  <section>
+    <div class="sec-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13.5 6.5 10.5 9.5"/><path d="M8 12v3a2 2 0 0 0 2 2h3"/><path d="m15.5 13.5 3 3"/></svg>
+      <h2>二、素材采集流程</h2>
+    </div>
+    <p class="sec-sub">采集服务 <code>:8020</code> —— 检索 → 清洗 → 梗概 → 查重 → 入库。任何一环不满足条件都会停下来告诉管理员，而不是硬塞进素材库。</p>
+    <div class="flow" id="flowCrawl"></div>
+  </section>
+
+  <!-- ============ 3. 生成流程 ============ -->
+  <section>
+    <div class="sec-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-8.5-6"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 8.5 6"/><path d="M21 3v6h-6"/><path d="M3 21v-6h6"/></svg>
+      <h2>三、语篇生成流程</h2>
+    </div>
+    <p class="sec-sub">生成服务 <code>:8010</code> —— 扩写 → 自检 → 重写闭环 → 预览 → 人工确认 → 入库。<strong>代码管可确定的项，LLM 管语义项</strong>，两者都过才允许入库。</p>
+    <div class="flow" id="flowGen"></div>
+    <div class="loopnote">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-8.5-6"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 8.5 6"/><path d="M21 3v6h-6"/><path d="M3 21v-6h6"/></svg>
+      <span>
+        <strong>回炉闭环：</strong>任一自检不通过 → 把具体问题（缺多少词、哪段编造了事实、哪段中英没对上）回喂给模型重写，
+        最多 4 次重写、共 5 轮；多个候选里挑「问题最少 + 词数最贴近区间中值」的那一版。
+        自检仍不过时 <code>commit</code> 会返回 422 拦住入库，除非管理员显式 <code>force=true</code>。
+      </span>
+    </div>
+  </section>
+
+  <!-- ============ 4. 时序图 ============ -->
+  <section>
+    <div class="sec-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+      <h2>四、端到端时序图</h2>
+    </div>
+    <p class="sec-sub">
+      三段：管理员采集入库 → 管理员生成入库 → 学生阅读。实心箭头是请求，虚线是返回，
+      竖条是参与者的活跃区间。小屏可左右滑动查看。
+    </p>
+    <div class="card pad">
+      <div class="fig-wrap" id="seq"></div>
+      <div class="legend">
+        <span><i class="dot"></i>请求</span>
+        <span><i class="dot soft"></i>返回 / 内部处理</span>
+        <span><i class="dot warm"></i>回炉闭环</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5. 关键机制 ============ -->
+  <section>
+    <div class="sec-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+      <h2>五、五个关键机制</h2>
+    </div>
+    <div class="mech">
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          素材查重：两重判据
+        </h3>
+        <dl>
+          <dt>梗概指纹</dt><dd>sha256(归一化梗概)，忽略全部空白差异</dd>
+          <dt>来源链接</dt><dd>忽略 http/https、www. 前缀、末尾斜杠、# 锚点；保留查询串</dd>
+          <dt>为何两重</dt><dd>同一篇报道抓两次，LLM 两次梗概措辞有微差 → 指纹不同</dd>
+          <dt>命中后果</dt><dd>返回 409，阻断入库</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+          生成校验：分工
+        </h3>
+        <dl>
+          <dt>代码判定</dt><dd>词数区间、中英段落数一致、段落数在区间内、中文段落无残留英文</dd>
+          <dt>LLM 判定</dt><dd>是否编造事实、是否含敏感内容、是否真的互为翻译</dd>
+          <dt>词数区间</dt><dd>L1 80–120 / L2 120–180 / L3 180–240</dd>
+          <dt>计数口径</dt><dd>以代码计数为准，模型自报词数只作参考</dd>
+          <dt>长度约束</dt><dd>给「每段几句」而不是「每段几词」——9B 模型数不准词数</dd>
+          <dt>事实清单</dt><dd>梗概拆成事实句并按段派活，编造空间被压到最小</dd>
+          <dt>回炉闭环</dt><dd>反馈里点名「你写了 N 段、差 M 词」并附上一版原文，最多重写 4 次</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m4 12 8-8 8 8"/><path d="M4 20h16"/></svg>
+          检索兜底：双通道
+        </h3>
+        <dl>
+          <dt>主通道</dt><dd>SearXNG 元搜索，串行 + 限流，总预算 45 秒</dd>
+          <dt>兜底通道</dt><dd>白名单媒体 RSS 直采，同一套过滤与排序规则</dd>
+          <dt>触发条件</dt><dd>SearXNG 有响应但候选为空（验证码 / 超时 / JS 壳）</dd>
+          <dt>排序</dt><dd>全局相关度排序 + 每源配额，避免单频道刷屏</dd>
+          <dt>去重</dt><dd>URL + 标题两把键，同一报道被多频道推送只留一条</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20"/><path d="M6 8v8"/><path d="M18 8v8"/></svg>
+          段落绑定与只读
+        </h3>
+        <dl>
+          <dt>绑定规则</dt><dd>english_paras[i] ↔ chinese_paras[i] 一一对应，数量必须相等</dd>
+          <dt>前端交互</dt><dd>选中一侧 → 另一侧对应段落高亮（双向）</dd>
+          <dt>只读保证</dt><dd>前端只有 publishable 密钥，RLS 层禁写</dd>
+          <dt>收藏</dt><dd>只存 localStorage 快照，换浏览器即丢失</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 5.6a9 9 0 1 1-12.8 0"/></svg>
+          幂等与启停
+        </h3>
+        <dl>
+          <dt>种子数据</dt><dd>seed.sql 包在 DO 守卫里，可重复执行不插重复文章</dd>
+          <dt>停服务</dt><dd>杀进程树 + 按端口兜底，避免留下占端口的孤儿进程</dd>
+          <dt>起服务</dt><dd>启动前清端口，启动后逐个探活并点名失败项</dd>
+          <dt>脚本编码</dt><dd>.ps1 存为带 BOM 的 UTF-8，PS 5.1 与 7 都能跑</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    配套脚本：<code>scripts/e2e_smoke.py</code>（端到端冒烟）、<code>scripts/probe_material.py</code>（单条素材复跑）、
+    <code>scripts/probe_themes.py</code>（四主题检索耗时与区分度）、
+    <code>scripts/start.ps1</code> / <code>stop.ps1</code> / <code>status.ps1</code>。
+    交互接口见 <code>:8010/docs</code> 与 <code>:8020/docs</code>。
+  </footer>
+
+</div>
+
+<script>
+/* ============================================================
+   1. 组件拓扑图
+   ============================================================ */
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const INK = "#14171e", INK2 = "#3a4256", MUTED = "#7c7a72";
+  const LINE = "#e0d9c9", PRIMARY = "#2f6f5e", WARM = "#c97b3f";
+
+  function el(tag, attrs, text) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+  function box(x, y, w, h, title, sub, opts) {
+    opts = opts || {};
+    const g = el("g", {});
+    g.appendChild(el("rect", {
+      x, y, width: w, height: h, rx: 11,
+      fill: opts.fill || "#fff", stroke: opts.stroke || LINE, "stroke-width": 1.2
+    }));
+    const ty = opts.note ? y + 25 : (sub ? y + h / 2 - 4 : y + h / 2 + 5);
+    g.appendChild(el("text", {
+      x: x + w / 2, y: ty, "text-anchor": "middle",
+      "font-family": "Outfit, 'Microsoft YaHei', sans-serif", "font-size": 13.5,
+      "font-weight": 600, fill: opts.tcolor || INK
+    }, title));
+    if (sub) {
+      g.appendChild(el("text", {
+        x: x + w / 2, y: opts.note ? y + 43 : y + h / 2 + 15, "text-anchor": "middle",
+        "font-family": "'JetBrains Mono', monospace", "font-size": 10.5, fill: MUTED
+      }, sub));
+    }
+    if (opts.note) {
+      g.appendChild(el("text", {
+        x: x + w / 2, y: y + 60, "text-anchor": "middle",
+        "font-family": "Outfit, 'Microsoft YaHei', sans-serif", "font-size": 10.5, fill: MUTED
+      }, opts.note));
+    }
+    return g;
+  }
+  function arrow(x1, y1, x2, y2, opts) {
+    opts = opts || {};
+    const g = el("g", {});
+    g.appendChild(el("line", {
+      x1, y1, x2, y2, stroke: opts.stroke || INK2, "stroke-width": 1.5,
+      "stroke-dasharray": opts.dash || "none", "marker-end": "url(#ah)"
+    }));
+    return g;
+  }
+  function label(x, y, text, color) {
+    const t = el("text", {
+      x, y, "text-anchor": "middle",
+      "font-family": "'JetBrains Mono', monospace", "font-size": 10.5,
+      fill: color || PRIMARY, "paint-order": "stroke", stroke: "#fff", "stroke-width": 3.5
+    }, text);
+    return t;
+  }
+
+  const svg = el("svg", { viewBox: "0 0 1000 340", role: "img" });
+  const defs = el("defs", {});
+  defs.appendChild(el("marker", {
+    id: "ah", markerWidth: 9, markerHeight: 9, refX: 7.5, refY: 3, orient: "auto"
+  }));
+  defs.appendChild(el("path", { d: "M0,0 L0,6 L7,3 z", fill: INK2 }));
+  svg.appendChild(defs);
+
+  // 参与者
+  svg.appendChild(box(20, 44, 132, 54, "管理员", "浏览器", { fill: "#fbfaf7" }));
+  svg.appendChild(box(800, 166, 160, 54, "学生", "浏览器", { fill: "#fbfaf7" }));
+  svg.appendChild(box(580, 262, 180, 54, "localStorage", "收藏快照", { fill: "#fbfaf7", stroke: "#e3d9c6" }));
+
+  // 三个后端组件
+  svg.appendChild(box(230, 16, 180, 72, "采集服务", ":8020", {
+    fill: "#fff", note: "检索 · 清洗 · 梗概 · 查重"
+  }));
+  svg.appendChild(box(230, 112, 180, 72, "生成服务", ":8010", {
+    fill: "#fff", note: "扩写 · 自检 · 重写 · 入库"
+  }));
+  svg.appendChild(box(230, 212, 180, 58, "Ollama", "qwen3.5:9b", { fill: "#fbfaf7", stroke: "#e3d9c6" }));
+
+  // 数据底座（高亮）
+  svg.appendChild(box(520, 52, 190, 74, "Supabase", "Postgres 17 + RLS", {
+    fill: "rgba(47,111,94,.07)", stroke: PRIMARY, tcolor: PRIMARY,
+    note: "source_log / articles 两表"
+  }));
+  // 前端
+  svg.appendChild(box(790, 52, 180, 74, "前端站点", "React + Vite + TS", {
+    fill: "#fff", note: "日历 · 筛选 · 列表 · 联动高亮"
+  }));
+
+  // 管理员 → 采集 / 生成
+  svg.appendChild(arrow(152, 62, 226, 44));
+  svg.appendChild(arrow(152, 82, 226, 140));
+  svg.appendChild(label(184, 38, "操作", MUTED));
+  // 采集 / 生成 → Ollama
+  svg.appendChild(arrow(290, 88, 290, 208, { dash: "5 4", stroke: WARM }));
+  svg.appendChild(arrow(360, 184, 360, 208, { dash: "5 4", stroke: WARM }));
+  svg.appendChild(label(376, 200, "LLM 提炼 / 扩写 / 自检", WARM));
+  // 采集 / 生成 → Supabase
+  svg.appendChild(arrow(410, 46, 516, 68));
+  svg.appendChild(arrow(410, 150, 516, 112));
+  svg.appendChild(label(463, 42, "写 source_log", PRIMARY));
+  svg.appendChild(label(463, 172, "写 articles", PRIMARY));
+  // Supabase → 前端
+  svg.appendChild(arrow(710, 88, 786, 88));
+  svg.appendChild(label(748, 78, "anon 只读", PRIMARY));
+  // 前端 → 学生 / localStorage
+  svg.appendChild(arrow(880, 126, 880, 162));
+  svg.appendChild(label(896, 150, "站点", MUTED));
+  svg.appendChild(arrow(792, 126, 740, 258));
+  svg.appendChild(label(766, 186, "收藏", MUTED));
+
+  document.getElementById("arch").appendChild(svg);
+})();
+
+/* ============================================================
+   2. 两条内部流程链
+   ============================================================ */
+(function () {
+  function render(target, steps) {
+    const host = document.getElementById(target);
+    steps.forEach(function (s, i) {
+      const d = document.createElement("div");
+      d.className = "step" + (s.loop ? " loop" : "");
+      const n = document.createElement("span");
+      n.className = "n";
+      n.textContent = s.loop ? "↺" : String(i + 1);
+      const b = document.createElement("b");
+      b.textContent = s.t;
+      const sm = document.createElement("small");
+      sm.textContent = s.d;
+      d.appendChild(n); d.appendChild(b); d.appendChild(sm);
+      host.appendChild(d);
+    });
+  }
+
+  render("flowCrawl", [
+    { t: "选主题 / 时间范围", d: "四大主题；day / week / month" },
+    { t: "SearXNG 检索", d: "串行调用 + 最小间隔，禁止并发；总预算 45 秒" },
+    { t: "0 候选 → RSS 兜底", d: "白名单媒体 RSS 频道直采，同一套过滤与排序规则" },
+    { t: "四道过滤", d: "域名白名单 → 关键词黑名单 → 标题过短 → URL/标题去重" },
+    { t: "管理员点选一条", d: "候选列表来自检索结果，可换主题重搜" },
+    { t: "Crawl4AI 清洗", d: "library → http → builtin 三级降级" },
+    { t: "正文短于 200 字丢弃", d: "提示重选，不阻塞主流程" },
+    { t: "LLM 提炼五段式梗概", d: "新闻标题 / 核心事实 / 背景意义 / 正向导向 / 禁止加入内容" },
+    { t: "两重查重", d: "SHA256 指纹 + 来源链接；命中即阻断" },
+    { t: "预览 → 确认入库", d: "写入 source_log，备注自动带上来源链接" }
+  ]);
+
+  render("flowGen", [
+    { t: "素材梗概 / 常青主题", d: "source_id、梗概文本，或 evergreen 无时效科普" },
+    { t: "拆成事实清单", d: "按标签拆出事实句与禁止项，按段派活，编造空间最小化" },
+    { t: "渲染 Prompt", d: "prompts.yaml + taxonomy.yaml，可配置" },
+    { t: "LLM 扩写生成", d: "输出标题 + 中英段落数组的 JSON" },
+    { t: "结构化解析", d: "解析失败可重试，仍失败才报错" },
+    { t: "代码自检", d: "词数区间 / 中英段落数一致 / 中文纯度" },
+    { t: "LLM 二次自检", d: "编造事实 / 敏感内容 / 是否互为翻译；判官点名要删的句子" },
+    { t: "选最优候选", d: "问题最少 + 词数最贴近区间中值" },
+    { t: "预览草稿 + 自检报告", d: "返回 draft_id 与 validation" },
+    { t: "人工确认 → 写 articles", d: "自检未过则 422 拦截，force 才放行" },
+    { t: "不通过则回喂重写", d: "回喂具体问题 + 上一版原文，最多 4 次重写、共 5 轮", loop: true }
+  ]);
+})();
+
+/* ============================================================
+   3. 端到端时序图
+   ============================================================ */
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const INK = "#14171e", INK2 = "#3a4256", MUTED = "#7c7a72";
+  const LINE = "#ded6c5", PRIMARY = "#2f6f5e", WARM = "#c97b3f";
+
+  const P = [
+    { n: "管理员", s: "Admin" },
+    { n: "采集服务", s: ":8020" },
+    { n: "生成服务", s: ":8010" },
+    { n: "SearXNG · Crawl4AI", s: "检索 · 清洗" },
+    { n: "Ollama", s: "qwen3.5:9b" },
+    { n: "Supabase", s: ":54321" },
+    { n: "学生前端", s: ":5173" },
+    { n: "学生", s: "浏览器" }
+  ];
+  const X0 = 64, GAP = 141;
+  const px = function (i) { return X0 + i * GAP; };
+
+  // type: g=分组  c=调用  r=返回  l=自循环
+  const ITEMS = [
+    { type: "g", label: "① 素材采集与入库" },
+    { t: "c", f: 0, o: 1, m: "选主题 / 时间范围 / 关键词", af: 1 },
+    { t: "c", f: 1, o: 3, m: "检索（串行 + 限流 + 45s 预算）", af: 1, at: 1 },
+    { t: "r", f: 3, o: 1, m: "0 候选（上游引擎不可用）" },
+    { t: "c", f: 1, o: 3, m: "RSS 兜底直采（同一套过滤规则）", af: 1, at: 1 },
+    { t: "r", f: 3, o: 1, m: "候选结果 + 来源徽章" },
+    { t: "c", f: 0, o: 1, m: "点选一条新闻链接", af: 1 },
+    { t: "c", f: 1, o: 3, m: "抓取清洗正文", af: 1, at: 1 },
+    { t: "r", f: 3, o: 1, m: "正文 Markdown（过短丢弃）" },
+    { t: "c", f: 1, o: 4, m: "提炼五段式梗概", af: 1, at: 1 },
+    { t: "r", f: 4, o: 1, m: "梗概文本" },
+    { t: "c", f: 1, o: 5, m: "查重：指纹 + 来源链接", af: 1, at: 1 },
+    { t: "r", f: 5, o: 1, m: "未命中" },
+    { t: "c", f: 0, o: 1, m: "确认入库", af: 1 },
+    { t: "c", f: 1, o: 5, m: "INSERT source_log", af: 1, at: 1 },
+
+    { type: "g", label: "② 语篇生成与入库" },
+    { t: "c", f: 0, o: 2, m: "预览（source_id / 梗概）", af: 1 },
+    { t: "c", f: 2, o: 5, m: "读取素材", af: 1, at: 1 },
+    { t: "r", f: 5, o: 2, m: "素材梗概" },
+    { t: "c", f: 2, o: 4, m: "渲染 Prompt + 扩写", af: 1, at: 1 },
+    { t: "r", f: 4, o: 2, m: "标题 + 中英段落 JSON" },
+    { t: "c", f: 2, o: 4, m: "二次自检（编造 / 敏感 / 互译）", af: 1, at: 1 },
+    { t: "r", f: 4, o: 2, m: "自检结论" },
+    { t: "l", f: 2, m: "不通过 → 回喂重写（≤4 次）", af: 1 },
+    { t: "r", f: 2, o: 0, m: "预览草稿 + 自检报告" },
+    { t: "c", f: 0, o: 2, m: "人工确认入库", af: 1 },
+    { t: "c", f: 2, o: 5, m: "INSERT articles", af: 1, at: 1 },
+
+    { type: "g", label: "③ 学生阅读（只读）" },
+    { t: "c", f: 7, o: 6, m: "打开站点", af: 1 },
+    { t: "c", f: 6, o: 5, m: "SELECT articles（anon）", af: 1, at: 1 },
+    { t: "r", f: 5, o: 6, m: "仅 is_published = true" },
+    { t: "l", f: 6, m: "日历 / 筛选 / 三档视图", af: 1 },
+    { t: "l", f: 6, m: "点开文章 · 段落联动高亮", af: 1 },
+    { t: "l", f: 6, m: "收藏写入 localStorage", af: 1 }
+  ];
+
+  function E(tag, a, txt) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in a) n.setAttribute(k, a[k]);
+    if (txt !== undefined) n.textContent = txt;
+    return n;
+  }
+
+  // ---- 布局计算 ----
+  const rows = [];
+  let y = 92, seq = 0;
+  ITEMS.forEach(function (it) {
+    if (it.type === "g") { rows.push({ g: it.label, y: y }); y += 36; return; }
+    seq += 1;
+    rows.push({ it: it, n: seq, y: y });
+    y += 27;
+  });
+  const H = y + 18;
+
+  const svg = E("svg", { viewBox: "0 0 1120 " + H, role: "img" });
+
+  // markers
+  const defs = E("defs", {});
+  [["ah", INK2], ["ahr", "#a9a396"], ["ahw", WARM]].forEach(function (m) {
+    const mk = E("marker", { id: m[0], markerWidth: 9, markerHeight: 9, refX: 7.5, refY: 3, orient: "auto" });
+    mk.appendChild(E("path", { d: "M0,0 L0,6 L7,3 z", fill: m[1] }));
+    defs.appendChild(mk);
+  });
+  svg.appendChild(defs);
+
+  // 分组标题
+  rows.forEach(function (r) {
+    if (!r.g) return;
+    svg.appendChild(E("rect", {
+      x: 8, y: r.y - 15, width: 1104, height: 23, rx: 7,
+      fill: "rgba(47,111,94,.07)", stroke: "none"
+    }));
+    svg.appendChild(E("text", {
+      x: 20, y: r.y + 2, "font-family": "Outfit, 'Microsoft YaHei', sans-serif",
+      "font-size": 12, "font-weight": 600, fill: PRIMARY
+    }, r.g));
+  });
+
+  // 生命线
+  P.forEach(function (p, i) {
+    svg.appendChild(E("line", {
+      x1: px(i), y1: 68, x2: px(i), y2: H - 8,
+      stroke: LINE, "stroke-width": 1.2, "stroke-dasharray": "3 4"
+    }));
+  });
+
+  // 活跃区间
+  const act = P.map(function () { return { open: null, segs: [] }; });
+  rows.forEach(function (r) {
+    if (!r.it) return;
+    const it = r.it;
+    const yy = r.y;
+    P.forEach(function (_, i) {
+      const on = (it.f === i && it.af) || (it.o === i && it.at);
+      if (on) { if (act[i].open === null) act[i].open = yy; }
+      else if (act[i].open !== null) { act[i].segs.push([act[i].open, yy]); act[i].open = null; }
+    });
+  });
+  act.forEach(function (a, i) {
+    if (a.open !== null) a.segs.push([a.open, rows[rows.length - 1].y + 12]);
+    a.segs.forEach(function (s) {
+      svg.appendChild(E("rect", {
+        x: px(i) - 5, y: s[0] - 12, width: 10, height: s[1] - s[0] + 24,
+        rx: 4, fill: "rgba(47,111,94,.13)", stroke: "none"
+      }));
+    });
+  });
+
+  // 消息
+  rows.forEach(function (r) {
+    if (!r.it) return;
+    const it = r.it, yy = r.y;
+    if (it.t === "l") {
+      const x = px(it.f);
+      svg.appendChild(E("path", {
+        d: "M" + (x + 5) + "," + yy + " H" + (x + 42) + " V" + (yy + 15) + " H" + (x + 7),
+        fill: "none", stroke: WARM, "stroke-width": 1.4, "marker-end": "url(#ahw)"
+      }));
+      svg.appendChild(E("text", {
+        x: x + 50, y: yy + 12, "font-family": "Outfit, 'Microsoft YaHei', sans-serif",
+        "font-size": 11.5, fill: WARM, "paint-order": "stroke", stroke: "#fff", "stroke-width": 3.5
+      }, r.n + " · " + it.m));
+      return;
+    }
+    const isRet = it.t === "r";
+    const x1 = isRet ? px(it.o) : px(it.f);
+    const x2 = isRet ? px(it.f) : px(it.o);
+    svg.appendChild(E("line", {
+      x1: x1, y1: yy, x2: x2, y2: yy,
+      stroke: isRet ? "#a9a396" : INK2, "stroke-width": 1.4,
+      "stroke-dasharray": isRet ? "5 4" : "none",
+      "marker-end": isRet ? "url(#ahr)" : "url(#ah)"
+    }));
+    svg.appendChild(E("text", {
+      x: (x1 + x2) / 2, y: yy - 7, "text-anchor": "middle",
+      "font-family": "Outfit, 'Microsoft YaHei', sans-serif", "font-size": 11.5,
+      fill: isRet ? MUTED : INK,
+      "paint-order": "stroke", stroke: "#fff", "stroke-width": 3.5
+    }, r.n + " · " + it.m));
+  });
+
+  // 参与者框（最后画，压住生命线顶端）
+  P.forEach(function (p, i) {
+    const x = px(i) - 63, w = 126;
+    svg.appendChild(E("rect", {
+      x: x, y: 14, width: w, height: 46, rx: 10,
+      fill: "#fff", stroke: LINE, "stroke-width": 1.2
+    }));
+    svg.appendChild(E("text", {
+      x: px(i), y: 34, "text-anchor": "middle",
+      "font-family": "Outfit, 'Microsoft YaHei', sans-serif", "font-size": 12.5,
+      "font-weight": 600, fill: INK
+    }, p.n));
+    svg.appendChild(E("text", {
+      x: px(i), y: 50, "text-anchor": "middle",
+      "font-family": "'JetBrains Mono', monospace", "font-size": 9.5, fill: MUTED
+    }, p.s));
+  });
+
+  document.getElementById("seq").appendChild(svg);
+})();
+</script>
+</body>
+</html>

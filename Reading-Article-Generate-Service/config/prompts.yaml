@@ -1,0 +1,319 @@
+# ===========================================================================
+# Prompt 模板 —— 可配置，改完重启服务生效（PRD §4.2）
+# 渲染方式为 .replace('{{KEY}}', value)，不会与 JSON 花括号冲突
+# ===========================================================================
+version: 1
+
+# --------------------------------------------------------------------------
+# 扩写模板（PRD §2.2）
+# --------------------------------------------------------------------------
+expansion:
+  system: |
+    You are a professional English reading-text writer for Chinese middle-school students
+    (Grade 7, age 12-13). You always answer with a single raw JSON object and never
+    wrap it in a markdown code fence.
+
+  common: |
+    ## Material (the ONLY factual basis of the passage)
+    <<<MATERIAL
+    {{summary}}
+    MATERIAL>>>
+
+    ## Your job, paragraph by paragraph
+    The material above contains exactly these facts (Chinese, verbatim):
+    {{fact_list}}
+
+    {{para_assignment}}
+    Every fact above must be used, and only where the assignment says. The passage may
+    NOT contain any fact that is not in this list. If you need more sentences in a
+    paragraph, unpack the assigned facts further — split one fact into two sentences,
+    describe the same event step by step, or restate the same fact in different words.
+    NEVER introduce a new fact to fill the space.
+
+    ## Forbidden (the material says so explicitly)
+    {{prohibition_list}}
+    These are hard bans: do not write anything they forbid, even if it would make the
+    passage better.
+
+    ## Hard rules
+    1. The English passage must contain between {{min_words}} and {{max_words}} words.
+       Count only words in the English paragraphs, not the titles.
+    2. The English paragraph array and the Chinese paragraph array MUST have exactly
+       the same number of elements. Never merge or split a paragraph on one side only.
+    3. Every Chinese paragraph must be the translation of the English paragraph at the
+       SAME index.
+    3a. Write the Chinese paragraphs in Chinese. Translate every English word — do NOT
+       leave English words inside a Chinese paragraph, and do NOT leave Chinese words
+       inside an English paragraph.
+    4. Do NOT output exercises, vocabulary annotations, word lists, glosses, footnotes,
+       comprehension questions, thinking questions, answer keys, or any commentary.
+    5. Do NOT invent facts, numbers, names, places, dates, or outcomes that are absent
+       from the material. Stay strictly inside the material.
+    5a. Copy the material's own wording for anything countable. If the material says
+       课本 / textbooks without a number, write it WITHOUT a number (never 一本 / one
+       textbook). If the material does not say 重要 / important, do not add that
+       adjective either. Do not add weather details, school names, dates or places
+       that the material does not mention. One small unsupported detail counts as a
+       fabricated fact, exactly like a wrong name would.
+    5b. Never give the person a reason, a motive, a feeling, an intention or an
+       evaluation that the material does not state. If the material says she walked
+       three hours to visit a student, do NOT write that she wanted to visit every
+       family, that she never rested, that she felt proud, or that her students were
+       waiting for her. Describe only what the material says and what plainly follows
+       from it. Adding a reason or a feeling is a fabricated fact.
+    5c. If the material leaves something unsaid, leave it unsaid. Do not fill the gap
+       with a plausible detail. It is better to write a shorter, plainer paragraph
+       than to add something the material never said.
+    5d. Never add any of these, even when they sound natural and even when they would
+       make a better story:
+       - a reason, a cause or a purpose ("the student was sick", "because the road was
+         closed", "so that the children could learn") — write only the event the
+         material states;
+       - a starting point or a place the person came from ("she left her school",
+         "he set out from the office") — write only where the material says the person
+         went;
+       - a modifier the material does not use ("new textbooks", "big hills", "an old
+         coat") — write the plain noun exactly as the material writes it;
+       - a narrower count than the material gives (the material says 学生们 / students,
+         so never write a single "a student"); keep the material's own count.
+       Every noun, modifier, number, place and reason in your passage must already
+       appear in the material. Adding even one of them makes the passage unusable.
+    5e. Keep every proper noun, place name, school, organisation, number and unit
+       EXACTLY as the material writes it: 黔东南 → QianDongNan (or "a mountainous area
+       in the province"), 三小时 → three hours, 两座山头 → two mountain tops.
+       If you are not sure how a Chinese name is written in English, describe it
+       generically ("a mountainous area in the province") instead of inventing a name.
+       Never invent a place, a school, a village, a road or a person's name.
+    5f. Never write a statement about what did NOT happen ("she did not stay home that
+       day", "no one helped her", "the books were not for the poor"), never add a time
+       qualifier the material does not give ("today", "that day", "before the term
+       ended"), and never frame the text ("news reports say", "people say", "it is said
+       that"). Write only what is, in the material's own terms.
+    6. Write plain prose paragraphs separated by blank lines. No markdown headings,
+       no bullet points, no numbering inside a paragraph.
+
+    ## How to reach the word count WITHOUT inventing facts
+    The passage has to be long enough, but length may only come from the material.
+    These are the only moves you may use:
+    - Unpack one material sentence into several English sentences.
+    - Restate the same fact from the other side, in the material's own words.
+    - Walk through the sequence the material already describes, one step at a time.
+      If the material says she walked three hours over two hills, you may describe the
+      walking, the three hours and the two hills — you may NOT say it was dark, that
+      she slipped, or that she nearly gave up.
+    - The material usually ends with its significance (背景意义). Use it as the closing
+      paragraph, keeping its wording. It is part of the material, so it is allowed.
+    - Repeat the material's own key words instead of introducing new ones.
+    Never invent a fact to fill the space. A passage that stays inside the material is
+    always better than a longer one that adds anything.
+
+    ## Required shape
+    - Write exactly {{para_count}} paragraphs in the English array, and exactly
+      {{para_count}} paragraphs in the Chinese array.
+    - Each English paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+      Count the sentences as you write them.
+    - Aim for about {{para_target}} words per paragraph, so the whole passage lands
+      between {{min_words}} and {{max_words}} words.
+    - Develop every paragraph with concrete detail — never a one-sentence paragraph —
+      but never invent a detail that the source does not give.
+
+    ## Level requirements ({{level}})
+    {{level_instruction}}
+
+    ## Length reminder
+    The whole English passage (all paragraphs together) must land between {{min_words}} and
+    {{max_words}} words. That is about {{para_target}} words per paragraph across
+    {{para_count}} paragraphs, with {{sent_lo}} to {{sent_hi}} sentences in each paragraph.
+    Do not stop early — every paragraph must be developed, not just stated.
+
+    ## Output format
+    Reply with a single JSON object and nothing else:
+    {
+      "title_en": "English title, max 12 words",
+      "title_cn": "Chinese title",
+      "english_paras": ["paragraph 1", "paragraph 2"],
+      "chinese_paras": ["段落一", "段落二"]
+    }
+
+  levels:
+    L1:
+      word_range: [80, 120]
+      para_range: [3, 5]
+      sentences_per_para: [3, 4]
+      instruction: |
+        - Length 80-120 words. Write exactly {{para_count}} paragraphs.
+        - Each paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+        - Sentences must be SHORT and simple: most of them under 15 words. Say one thing
+          per sentence, but do not leave any sentence unfinished.
+        - Use at most ONE subordinate clause per paragraph, and keep it simple.
+        - Vocabulary: very common and concrete. Avoid idioms, phrasal verbs and rare words.
+        - Use simple tenses (present simple, past simple, present continuous).
+        - The story or explanation must be easy to follow for a 12-year-old reader.
+    L2:
+      word_range: [120, 180]
+      para_range: [3, 5]
+      sentences_per_para: [4, 5]
+      instruction: |
+        - Length 120-180 words. Write exactly {{para_count}} paragraphs.
+        - Each paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+          A passage shorter than 120 words will be rejected.
+        - Use a moderate number of attributive and adverbial clauses (roughly one in every
+          two sentences).
+        - Vocabulary: around the level of the "B" passage of the Chinese junior-high
+          school entrance examination (中考B篇). A few common connectors are welcome
+          (because, although, when, since).
+        - Keep sentences under 22 words and keep the structure varied but clear.
+    L3:
+      word_range: [180, 240]
+      para_range: [4, 6]
+      sentences_per_para: [5, 6]
+      instruction: |
+        - Length 180-240 words. Write exactly {{para_count}} paragraphs.
+        - Each paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+          A passage shorter than 180 words will be rejected.
+        - Use many compound and complex sentences, including participial phrases
+          (..., walking along the river), conditionals and concession.
+        - Vocabulary and sentence variety: the level of the "C" and "D" passages of the
+          Chinese junior-high school entrance examination (中考C/D篇).
+        - Keep the argument or narrative line tight and coherent across paragraphs.
+
+# --------------------------------------------------------------------------
+# 常青素材模板（PRD §2.5：source_id 为空时按主题+难度生成非时效性科普短文）
+# --------------------------------------------------------------------------
+evergreen:
+  system: |
+    You are a professional English reading-text writer for Chinese middle-school students
+    (Grade 7, age 12-13). You always answer with a single raw JSON object and never
+    wrap it in a markdown code fence.
+
+  common: |
+    ## Topic
+    Main theme: {{theme}}
+    Sub topic: {{sub_theme}}
+
+    This passage must be EVERGREEN: it must teach stable, generally accepted knowledge
+    and must NOT depend on any current event, recent statistic, specific date, specific
+    country, specific company, or specific person's name.
+
+    ## Hard rules
+    1. The English passage must contain between {{min_words}} and {{max_words}} words.
+    2. The English paragraph array and the Chinese paragraph array MUST have exactly the
+       same number of elements.
+    2a. Write the Chinese paragraphs in Chinese. Translate every English word — do NOT
+       leave English words inside a Chinese paragraph.
+    3. Do NOT output exercises, vocabulary annotations, questions, answers or commentary.
+    4. Use only widely accepted textbook knowledge. No invented precise numbers.
+
+    ## Required shape
+    - Write exactly {{para_count}} paragraphs in the English array, and exactly
+      {{para_count}} paragraphs in the Chinese array.
+    - Each English paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+      Count the sentences as you write them.
+    - Aim for about {{para_target}} words per paragraph, so the whole passage lands
+      between {{min_words}} and {{max_words}} words.
+    - Develop every paragraph with concrete detail — never a one-sentence paragraph —
+      but never invent a detail that the source does not give.
+
+    ## Level requirements ({{level}})
+    {{level_instruction}}
+
+    ## Length reminder
+    The whole English passage (all paragraphs together) must land between {{min_words}} and
+    {{max_words}} words. That is about {{para_target}} words per paragraph across
+    {{para_count}} paragraphs, with {{sent_lo}} to {{sent_hi}} sentences in each paragraph.
+    Do not stop early — every paragraph must be developed, not just stated.
+
+    ## Output format
+    Reply with a single JSON object and nothing else:
+    {
+      "title_en": "English title, max 12 words",
+      "title_cn": "Chinese title",
+      "english_paras": ["paragraph 1", "paragraph 2"],
+      "chinese_paras": ["段落一", "段落二"]
+    }
+
+# --------------------------------------------------------------------------
+# 二次自检模板（PRD §2.3）
+# --------------------------------------------------------------------------
+self_check:
+  system: |
+    You are a strict quality checker for graded English reading passages. You always
+    answer with a single raw JSON object and never wrap it in a markdown code fence.
+
+  template: |
+    ## Source material (the ONLY source of facts)
+    <<<MATERIAL
+    {{summary}}
+    MATERIAL>>>
+
+    ## The material's facts (the ground truth for what the material states)
+    {{fact_list}}
+    Use this list to decide what the material supports. A passage detail that matches
+    one of these facts is supported — do not flag it, even if the passage words it
+    differently.
+
+    ## Candidate passage
+    English title: {{title_en}}
+    Chinese title: {{title_cn}}
+    English paragraphs (count = {{en_count}}):
+    {{english_paras}}
+
+    Chinese paragraphs (count = {{cn_count}}):
+    {{chinese_paras}}
+
+    ## Checks
+    1. word_count — the system counts words automatically and does not need your help.
+       Still report your own count as `word_count`, but do NOT list word-count problems
+       in `issues`.
+    2. no_fabrication — does the passage state any fact that is NOT supported by the
+       material above? Use these rules for this check:
+       - Flag it ONLY when the passage adds or changes something the material does not
+         support: a specific count ("一本重要的课本" where the material says only "课本"),
+         a new name / place / date / number, an extra detail (wind, ice, a school name),
+         a modifier the material does not use ("new textbooks" for 课本), a reason or a
+         cause the material does not give ("the student was sick"), a starting point
+         the material does not mention ("she left her school"), or a count narrower
+         than the material's own (材料说学生们, 文章写 a student).
+       - Do NOT flag the passage merely because it words the same fact differently
+         (material "two mountain tops" vs passage "two hills" is a translation choice).
+         Flag only what the passage ADDS.
+       - Do NOT flag number agreement when the material leaves the number unspecified.
+         Chinese source wording such as 学生家中 or 课本 does not fix a singular or plural
+         form; translating it either way is fine.
+       - Do NOT flag the passage for OMITTING a detail the material mentions. Omission
+         is not fabrication.
+       - Do not report a problem you are not sure about. If the material is empty
+         (evergreen passage), judge instead whether the passage stays on stable, generally
+         accepted knowledge and avoids invented precise figures.
+    3. para_match — are the English and Chinese paragraph counts equal?
+    4. no_sensitive — is the passage free of violence, crime, disaster, death, war,
+       politics, religion, sexual content, and other material unsuitable for a 12-year-old?
+
+    ## How to write issues
+    Write every issue as ONE short imperative instruction of at most 30 words that gives
+    the EXACT sentence to delete from the passage, e.g.
+      "Delete this sentence: 'She carried some new textbooks with her.'"
+    If the problem is one word inside a sentence, quote that whole sentence and name
+    the word to remove, e.g.
+      "In 'She carried some new textbooks with her.', remove 'new'."
+    No explanations, no hedging, no "acceptable", no "though not strictly a fabrication".
+
+    ## Before you report an issue
+    Look for the Chinese wording in the material that supports the passage. Chinese
+    words carry facts that are easy to miss:
+      独自 = alone,  唯一 / 只有 = the only one,  没有 / 未 / 不 = did not,
+      已经 = already,  正在 = currently,  共 = in total,  最 = the most
+    If the material states it in Chinese, the passage is supported and you must NOT
+    flag it. Report an issue ONLY when you are certain the material has no such
+    wording — a vague feeling that "sounds invented" is not enough.
+
+    ## Output format
+    Reply with a single JSON object and nothing else:
+    {
+      "word_count": 0,
+      "word_count_ok": true,
+      "no_fabrication": true,
+      "para_match": true,
+      "no_sensitive": true,
+      "issues": ["one short sentence per problem found, empty array when all good"]
+    }

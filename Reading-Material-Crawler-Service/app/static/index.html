@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>素材库管理 · Reading Material Crawler</title>
+  <link rel="icon" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>素材库管理</h1>
+      <span class="sub">Reading Material Crawler Service</span>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-view="collect">采集</button>
+      <button class="tab" data-view="library">素材库</button>
+      <button class="tab" data-view="logs">日志</button>
+    </nav>
+    <div class="status" id="health">连接中…</div>
+  </header>
+
+  <main>
+    <!-- ============================ 采集 ============================ -->
+    <section class="view active" id="view-collect">
+      <div class="card">
+        <h2>1 · 检索候选新闻</h2>
+        <div class="form-row">
+          <label>主题
+            <select id="theme"></select>
+          </label>
+          <label>时间范围
+            <select id="time-range"></select>
+          </label>
+          <label class="grow">附加关键词（可选）
+            <input id="keyword" type="text" placeholder="例如：乡村教师" />
+          </label>
+          <button class="primary" id="btn-search">检索</button>
+        </div>
+        <p class="hint">白名单 / 黑名单 / Query 模板见 config/search.yaml，检索时自动过滤。</p>
+        <div id="search-result"></div>
+      </div>
+
+      <div class="card" id="card-extract" hidden>
+        <h2>2 · 抓取清洗 + 梗概提炼 + 查重</h2>
+        <div id="extract-body"></div>
+      </div>
+
+      <div class="card" id="card-confirm" hidden>
+        <h2>3 · 确认入库</h2>
+        <div id="confirm-body"></div>
+      </div>
+    </section>
+
+    <!-- ============================ 素材库 ============================ -->
+    <section class="view" id="view-library">
+      <div class="card">
+        <div class="card-head">
+          <h2>素材库</h2>
+          <button id="btn-reload-library">刷新</button>
+        </div>
+        <div id="library-list"></div>
+      </div>
+    </section>
+
+    <!-- ============================ 日志 ============================ -->
+    <section class="view" id="view-logs">
+      <div class="card">
+        <div class="card-head">
+          <h2>运行日志</h2>
+          <button id="btn-reload-logs">刷新</button>
+        </div>
+        <div id="logs-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

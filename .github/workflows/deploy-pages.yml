@@ -1,0 +1,80 @@
+# =============================================================================
+# 前端发布到 GitHub Pages
+#
+# 触发：推送到 main / 手动触发
+# 产物：Reading-Web-Frontend/dist → GitHub Pages
+#
+# 必配 Secrets（仓库 → Settings → Secrets and variables → Actions）：
+#   VITE_SUPABASE_URL        在线 Supabase 项目地址，如 https://xxxx.supabase.co
+#   VITE_SUPABASE_ANON_KEY   publishable / anon 密钥（绝不能放 service_role）
+#
+# 可选 Variables：
+#   VITE_BASE_PATH           自定义域名时留空；普通 <user>.github.io/<repo>/ 部署
+#                            留空即可，工作流会用仓库名自动推导
+# =============================================================================
+
+name: Deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Reading-Web-Frontend/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一分支只跑一次，排队中的旧任务直接取消
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  # 让 vite 的 base 自动推导成 /<repo>/
+  VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: Reading-Web-Frontend/package-lock.json
+
+      - name: 安装依赖
+        working-directory: Reading-Web-Frontend
+        run: npm ci
+
+      - name: 类型检查
+        working-directory: Reading-Web-Frontend
+        run: npm run typecheck
+
+      - name: 构建
+        working-directory: Reading-Web-Frontend
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Reading-Web-Frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

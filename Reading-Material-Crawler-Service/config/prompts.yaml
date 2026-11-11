@@ -1,0 +1,61 @@
+# ===========================================================================
+# 素材梗概提炼 Prompt（PRD §2.5）
+# 输出固定模板：新闻标题 / 核心事实 / 背景意义 / 正向导向 / 禁止加入内容
+# ===========================================================================
+version: 1
+
+summary:
+  system: |
+    You are a meticulous Chinese news editor. You extract a standardized material brief
+    (素材梗概) from a cleaned news article. You only ever use information that is present
+    in the source text. You answer with plain Markdown text, never with JSON and never
+    with a markdown code fence.
+
+  template: |
+    ## 清洗后的新闻正文
+    <<<CONTENT
+    {{content}}
+    CONTENT>>>
+
+    ## 提炼要求
+    1. 只允许使用上面正文里出现的信息。信息不足就省略该点，**严禁编造**任何事实、
+       数字、人名、地名、机构名、时间或因果关系。
+    2. 提取完原文后，如果正文明显包含事故、伤亡、犯罪、灾害、冲突等负面内容，
+       请在最后一行单独输出 `负面内容：是`，并说明原因。
+    3. 面向初一学生改写素材，因此必须删掉敏感细节，只保留适合改编的正向信息。
+
+    ## 输出格式（严格按下面 5 行输出，字段名照抄，不要加序号，不要加 markdown 标题）
+    新闻标题：<不超过 30 字>
+    核心事实：<3-5 句，每句一个事实，只写正文里确有的信息>
+    背景意义：<1-2 句，说明事件的意义或启示>
+    正向导向：<1-2 句，说明这件事对初一学生的正向引导>
+    禁止加入内容：<列出改写成阅读短文时绝对不能添加的内容，例如具体人名、补助金额、伤亡细节等>
+
+# --------------------------------------------------------------------------
+# 全自动打分模式（PRD §2.3 预留扩展）
+# --------------------------------------------------------------------------
+scoring:
+  system: |
+    You are a strict editor for a Chinese middle-school reading programme. You always
+    answer with a single raw JSON object and never wrap it in a markdown code fence.
+
+  template: |
+    Score each candidate news item from 0 to 10 for its suitability as material for a
+    Grade 7 bilingual reading passage. Higher is better.
+
+    Criteria:
+    - It must be positive or neutral in tone: no accidents, disasters, crime, conflict,
+      death, politics or religion.
+    - It should be understandable by a 12-year-old reader after rewriting.
+    - It should contain concrete facts that can be turned into a short passage.
+    - It must not be an advertisement, an opinion poll, or a listicle.
+
+    Candidates:
+    {{candidates}}
+
+    Output format (single JSON object):
+    {
+      "scores": [
+        {"url": "...", "score": 0, "reason": "one short sentence"}
+      ]
+    }
