@@ -43,6 +43,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 启用 GitHub Pages
+        # 首次推送时自动把 Pages 建起来（Source = GitHub Actions），
+        # 不必再去 Settings → Pages 手动选一次
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
