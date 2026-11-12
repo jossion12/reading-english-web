@@ -77,6 +77,15 @@ class PromptLibrary:
         para_count = self.para_count(level)
         return max(10, math.ceil(min_words * 1.1 / para_count))
 
+    def para_max(self, level: str) -> int:
+        """每段词数上限：段落目标词数 × 1.1。
+
+        配合 para_min 用，构成「每段 N~M 词」的窄带。段落数固定时，
+        每段 × 段落数的乘积落在难度区间内部，整篇总词数就不会再越界 ——
+        这比只给一个总词数区间管用（模型写长的倾向是系统性的）。
+        """
+        return max(10, round(self.para_target(level) * 1.1))
+
     def sentences_per_para(self, level: str) -> tuple[int, int]:
         """每段句数区间。
 
@@ -88,6 +97,29 @@ class PromptLibrary:
         if not cfg:
             return 4, 5
         return int(cfg[0]), int(cfg[1])
+
+    def sent_label(self, level: str) -> str:
+        """句数要求的自然语言写法。
+
+        区间上下界相同时写成「exactly N」，否则写成「N to M」。
+        模型总往区间上界写，钉死成单值比给区间更稳。
+        """
+        lo, hi = self.sentences_per_para(level)
+        return f"exactly {lo}" if lo == hi else f"{lo} to {hi}"
+
+    def sentences_feedback(self, level: str) -> str:
+        """回喂给模型的句数指令。"""
+        lo, hi = self.sentences_per_para(level)
+        para_count = self.para_count(level)
+        if lo == hi:
+            return (
+                f"Put exactly {lo} sentences in EACH English paragraph "
+                f"({lo * para_count} sentences in the whole passage)."
+            )
+        return (
+            f"Put {lo} to {hi} sentences in EACH English paragraph "
+            f"({lo * para_count} to {hi * para_count} sentences in the whole passage)."
+        )
 
     def para_count(self, level: str) -> int:
         """建议段落数：取区间中值。"""
@@ -173,8 +205,10 @@ class PromptLibrary:
             "para_target": self.para_target(level),
             "para_count": self.para_count(level),
             "para_min": self.para_min(level),
+            "para_max": self.para_max(level),
             "sent_lo": self.sentences_per_para(level)[0],
             "sent_hi": self.sentences_per_para(level)[1],
+            "sent_label": self.sent_label(level),
             "fact_list": self._fact_list(facts),
             "para_assignment": self._para_assignment(assignment, facts),
             "prohibition_list": self._prohibition_list(prohibitions),

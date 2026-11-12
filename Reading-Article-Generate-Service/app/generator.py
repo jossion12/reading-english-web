@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from dataclasses import replace
 from datetime import date
 from typing import Any
 
@@ -20,6 +21,7 @@ from app.schemas import (
     PreviewResponse,
 )
 from app.store import LogStore, get_store
+from app.trim import trim_to_max_words
 from app.validate import (
     ValidationReport,
     deterministic_checks,
@@ -142,6 +144,20 @@ class ArticleGenerator:
                     continue
                 break
 
+            # 词数上限由代码兜底：模型在素材事实多时会把每条事实都展开，
+            # 长度靠指令改不动，超长时整句裁掉注水句（详见 app/trim.py）。
+            trim_result = trim_to_max_words(
+                list(parsed.english_paras),
+                list(parsed.chinese_paras),
+                max_words,
+            )
+            if trim_result.trimmed:
+                parsed = replace(
+                    parsed,
+                    english_paras=trim_result.english_paras,
+                    chinese_paras=trim_result.chinese_paras,
+                )
+
             report = deterministic_checks(
                 english_paras=parsed.english_paras,
                 chinese_paras=parsed.chinese_paras,
@@ -149,6 +165,8 @@ class ArticleGenerator:
                 max_words=max_words,
                 para_range=para_range,
             )
+            report.trimmed = trim_result.trimmed
+            report.trimmed_words = max(0, trim_result.words_before - trim_result.words_after)
             report = self._llm_self_check(
                 report,
                 summary=summary,
@@ -392,16 +410,14 @@ class ArticleGenerator:
                 "Do not write about anything that is not on it."
             )
         lines.append(
-            f"Each English paragraph must be at least {self.prompts.para_min(level)} words long "
+            f"Each English paragraph must be between {self.prompts.para_min(level)} and "
+            f"{self.prompts.para_max(level)} words long "
             f"(aim for about {para_target} words), so the total lands between "
             f"{min_words} and {max_words} words."
         )
         # 句数是小模型唯一能稳定执行的长度约束 —— 每次回喂都要给
-        sent_lo, sent_hi = self.prompts.sentences_per_para(level)
         lines.append(
-            f"Put {sent_lo} to {sent_hi} sentences in EACH English paragraph "
-            f"({sent_lo * para_count} to {sent_hi * para_count} sentences in the whole passage). "
-            f"Count the sentences as you write them."
+            self.prompts.sentences_feedback(level) + " Count the sentences as you write them."
         )
         if not report.word_count_ok:
             deficit = min_words - report.word_count
@@ -410,14 +426,16 @@ class ArticleGenerator:
                 f"{min_words} and {max_words}. "
                 + (f"It is {deficit} words short. " if deficit > 0 else
                    f"It is {report.word_count - max_words} words too long. ")
-                + ("Add more sentences, but only by unpacking what the material already "
+                + ("Add more words, but only by unpacking what the material already "
                    "says: split one material sentence into two, restate the same fact "
                    "from the other side, walk through the same sequence step by step, or "
                    "use the material's closing significance line. Do NOT add a new fact, "
                    "name, place, number or reason. "
                    if deficit > 0 else
-                   f"Use the lower end of the sentence range ({sent_lo} sentences per paragraph) "
-                   f"and delete the least important sentences, keeping the passage near "
+                   f"Keep every paragraph between {self.prompts.para_min(level)} and "
+                   f"{self.prompts.para_max(level)} words "
+                   f"(aim for about {para_target} words per paragraph) and delete the "
+                   f"least important sentences, keeping the passage near "
                    f"{(min_words + max_words) // 2} words.")
             )
         if not report.para_count_ok:

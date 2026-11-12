@@ -110,10 +110,11 @@ expansion:
     ## Required shape
     - Write exactly {{para_count}} paragraphs in the English array, and exactly
       {{para_count}} paragraphs in the Chinese array.
-    - Each English paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+    - Each English paragraph must contain {{sent_label}} sentences.
       Count the sentences as you write them.
-    - Aim for about {{para_target}} words per paragraph, so the whole passage lands
-      between {{min_words}} and {{max_words}} words.
+    - Each English paragraph must be between {{para_min}} and {{para_max}} words long
+      (aim for about {{para_target}} words). With {{para_count}} paragraphs this keeps the
+      whole passage between {{min_words}} and {{max_words}} words.
     - Develop every paragraph with concrete detail — never a one-sentence paragraph —
       but never invent a detail that the source does not give.
 
@@ -123,7 +124,8 @@ expansion:
     ## Length reminder
     The whole English passage (all paragraphs together) must land between {{min_words}} and
     {{max_words}} words. That is about {{para_target}} words per paragraph across
-    {{para_count}} paragraphs, with {{sent_lo}} to {{sent_hi}} sentences in each paragraph.
+    {{para_count}} paragraphs, with {{sent_label}} sentences in each paragraph, and every
+    paragraph between {{para_min}} and {{para_max}} words.
     Do not stop early — every paragraph must be developed, not just stated.
 
     ## Output format
@@ -139,10 +141,10 @@ expansion:
     L1:
       word_range: [80, 120]
       para_range: [3, 5]
-      sentences_per_para: [3, 4]
+      sentences_per_para: [3, 3]
       instruction: |
         - Length 80-120 words. Write exactly {{para_count}} paragraphs.
-        - Each paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+        - Each paragraph must contain {{sent_label}} sentences.
         - Sentences must be SHORT and simple: most of them under 15 words. Say one thing
           per sentence, but do not leave any sentence unfinished.
         - Use at most ONE subordinate clause per paragraph, and keep it simple.
@@ -152,10 +154,10 @@ expansion:
     L2:
       word_range: [120, 180]
       para_range: [3, 5]
-      sentences_per_para: [4, 5]
+      sentences_per_para: [4, 4]
       instruction: |
         - Length 120-180 words. Write exactly {{para_count}} paragraphs.
-        - Each paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+        - Each paragraph must contain {{sent_label}} sentences.
           A passage shorter than 120 words will be rejected.
         - Use a moderate number of attributive and adverbial clauses (roughly one in every
           two sentences).
@@ -166,11 +168,12 @@ expansion:
     L3:
       word_range: [180, 240]
       para_range: [4, 6]
-      sentences_per_para: [5, 6]
+      sentences_per_para: [4, 4]
       instruction: |
         - Length 180-240 words. Write exactly {{para_count}} paragraphs.
-        - Each paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
-          A passage shorter than 180 words will be rejected.
+        - Each paragraph must contain {{sent_label}} sentences. Make them compound and
+          complex sentences rather than more of them.
+        - A passage shorter than 180 words will be rejected.
         - Use many compound and complex sentences, including participial phrases
           (..., walking along the river), conditionals and concession.
         - Vocabulary and sentence variety: the level of the "C" and "D" passages of the
@@ -207,10 +210,11 @@ evergreen:
     ## Required shape
     - Write exactly {{para_count}} paragraphs in the English array, and exactly
       {{para_count}} paragraphs in the Chinese array.
-    - Each English paragraph must contain {{sent_lo}} to {{sent_hi}} sentences.
+    - Each English paragraph must contain {{sent_label}} sentences.
       Count the sentences as you write them.
-    - Aim for about {{para_target}} words per paragraph, so the whole passage lands
-      between {{min_words}} and {{max_words}} words.
+    - Each English paragraph must be between {{para_min}} and {{para_max}} words long
+      (aim for about {{para_target}} words). With {{para_count}} paragraphs this keeps the
+      whole passage between {{min_words}} and {{max_words}} words.
     - Develop every paragraph with concrete detail — never a one-sentence paragraph —
       but never invent a detail that the source does not give.
 
@@ -220,7 +224,8 @@ evergreen:
     ## Length reminder
     The whole English passage (all paragraphs together) must land between {{min_words}} and
     {{max_words}} words. That is about {{para_target}} words per paragraph across
-    {{para_count}} paragraphs, with {{sent_lo}} to {{sent_hi}} sentences in each paragraph.
+    {{para_count}} paragraphs, with {{sent_label}} sentences in each paragraph, and every
+    paragraph between {{para_min}} and {{para_max}} words.
     Do not stop early — every paragraph must be developed, not just stated.
 
     ## Output format
@@ -279,6 +284,17 @@ self_check:
          facts do not mention ("she left her school"); a count narrower than the
          facts' own (facts say 学生们, passage says "a student"); a claim about what did
          NOT happen; a time qualifier the facts do not give ("today").
+       - ADDING A PLACE NAME IS A FABRICATION. If the facts name only 河东社区 and the
+         passage writes "HeDong Community in HeShan District, HeBi City", then the city,
+         the district and the street are fabricated — the facts do not contain them. The
+         same applies to a school, a company, a hospital, a park or a province.
+       - ADDING A NUMBER IS A FABRICATION. If the facts do not give that count, the
+         passage may not give it either — not even a small or harmless one. "more than
+         10 emergency calls", "seven old people joined the team" and "about 20% of the
+         students" are all fabrications when no such figure is in the facts.
+       - ADDING A LIST IS A FABRICATION. If the facts say 国家人工智能应用中试基地 without
+         listing the sectors, a passage that adds "in manufacturing, energy, transport,
+         medical care and other fields" has fabricated every one of those sectors.
        - If you cannot name the specific added detail, do NOT report an issue.
        - Chinese names and places are normally transliterated into English
          (黔东南 → QianDongNan, 李雨 → Li Yu, 贵州 → Guizhou). A transliteration of a name

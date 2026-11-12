@@ -44,6 +44,10 @@ class ValidationReport(BaseModel):
     para_count: int = 0
     #: 段落数是否落在难度档位的建议区间内
     para_count_ok: bool = True
+    #: 是否因为超出词数上限而被裁剪过（见 app/trim.py）
+    trimmed: bool = False
+    #: 裁剪掉的词数
+    trimmed_words: int = 0
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -69,6 +73,8 @@ class ValidationReport(BaseModel):
             "chinese_purity": self.chinese_purity,
             "para_count": self.para_count,
             "para_count_ok": self.para_count_ok,
+            "trimmed": self.trimmed,
+            "trimmed_words": self.trimmed_words,
             "issues": list(self.issues),
             "llm_word_count": self.llm_word_count,
             "passed": self.passed,
