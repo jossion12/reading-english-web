@@ -57,11 +57,24 @@ try {
 } finally { Pop-Location }
 
 if (-not $SkipContainers) {
-    Write-Step "2/5 SearXNG 元搜索"
-    Push-Location (Join-Path $root "Reading-Material-Crawler-Service\deploy")
-    try { docker compose up -d searxng | Out-Host } finally { Pop-Location }
+    Write-Step "2/5 外部依赖 SearXNG / Crawl4AI"
+    # 这两个服务由本机的共享栈 searxng-crawl4ai 提供，这里只探活，
+    # 不代管它们的生命周期 —— 那是共享栈自己的事。
+    foreach ($dep in @(
+        @{ Name = "SearXNG";  Url = "http://127.0.0.1:8080/" },
+        @{ Name = "Crawl4AI"; Url = "http://127.0.0.1:11235/health" }
+    )) {
+        try {
+            $r = Invoke-WebRequest -Uri $dep.Url -UseBasicParsing -TimeoutSec 5
+            Write-Host ("    {0,-10} OK   HTTP {1}" -f $dep.Name, $r.StatusCode) -ForegroundColor Green
+        } catch {
+            Write-Host ("    {0,-10} 不可达（{1}）" -f $dep.Name, $dep.Url) -ForegroundColor Yellow
+            Write-Host "        在共享栈目录执行： docker compose up -d" -ForegroundColor DarkGray
+        }
+    }
+    Write-Host "    缺失不阻塞：检索有 RSS 兜底通道，网页清洗有内置降级提取器" -ForegroundColor DarkGray
 } else {
-    Write-Step "2/5 SearXNG（跳过）"
+    Write-Step "2/5 外部依赖（跳过）"
 }
 
 Write-Step "3/5 采集服务 :8020"

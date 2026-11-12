@@ -1,10 +1,19 @@
 # 本地依赖服务：SearXNG（元搜索）+ 可选 Crawl4AI（网页清洗）
 #
-#   docker compose -f deploy/docker-compose.yml up -d searxng
+# 默认这两个服务由共享栈 searxng-crawl4ai 提供：
+#   SearXNG   http://127.0.0.1:8080
+#   Crawl4AI  http://127.0.0.1:11235
+# 本文件里的服务挂在 standalone profile 上，默认不启动 —— 两个 SearXNG 抢同一个
+# 8080 端口只会有一台能起来，另一台报 port is already allocated。
 #
-# 只监听 127.0.0.1，不暴露公网。
+# 需要「独立部署」（换台机器、只有本仓库没有共享栈）时才显式启用：
+#   docker compose --profile standalone up -d searxng
+#   docker compose --profile standalone up -d crawl4ai
+#
+# 两个服务都只监听 127.0.0.1，不暴露公网。
 services:
   searxng:
+    profiles: ["standalone"]
     image: searxng/searxng:latest
     container_name: reading-searxng
     restart: unless-stopped
@@ -17,12 +26,16 @@ services:
 
   # 可选：需要真正用 Crawl4AI 清洗时才启动。
   # 未启动时采集服务会自动降级到内置提取器（CRAWLER_MODE=auto）。
-  # crawl4ai:
-  #   image: unclecode/crawl4ai:latest
-  #   container_name: reading-crawl4ai
-  #   restart: unless-stopped
-  #   shm_size: 1gb
-  #   ports:
-  #     - "127.0.0.1:11235:11235"
-  #   environment:
-  #     - CRAWL4AI_API_TIMEOUT=120
+  # Crawl4AI 0.9.x 开了鉴权后，容器侧 CRAWL4AI_API_TOKEN 与采集服务 .env 里的
+  # CRAWLER_API_TOKEN 必须是同一个值，否则抓取一律 401。
+  crawl4ai:
+    profiles: ["standalone"]
+    image: unclecode/crawl4ai:0.9.5
+    container_name: reading-crawl4ai
+    restart: unless-stopped
+    shm_size: 1gb
+    ports:
+      - "127.0.0.1:11235:11235"
+    environment:
+      - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:-}
+      - CRAWL4AI_WALL_CLOCK_S=${CRAWL4AI_WALL_CLOCK_S:-90}

@@ -18,7 +18,10 @@ Probe "采集服务"      "http://127.0.0.1:8020/health"
 Probe "采集管理台"    "http://127.0.0.1:8020/"
 Probe "生成服务"      "http://127.0.0.1:8010/health"
 Probe "Supabase API"  "http://127.0.0.1:54321/rest/v1/"
+
+Write-Host "`n外部依赖（共享栈 searxng-crawl4ai）" -ForegroundColor Cyan
 Probe "SearXNG"       "http://127.0.0.1:8080/"
+Probe "Crawl4AI"      "http://127.0.0.1:11235/health"
 
 Write-Host "`n容器" -ForegroundColor Cyan
 $containers = docker ps --format "{{.Names}}`t{{.Status}}" 2>$null

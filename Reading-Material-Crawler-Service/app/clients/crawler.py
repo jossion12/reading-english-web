@@ -2,7 +2,7 @@
 
 三种模式：
   library  —— 直接 import 本地 crawl4ai 库（AsyncWebCrawler），最贴近 PRD 描述
-  http     —— 调用已启动的 Crawl4AI 服务（/md 或 /crawl）
+  http     —— 调用已启动的 Crawl4AI 服务（0.9.x 走 /crawl，老版本走 /md 或 /crawl）
   builtin  —— 内置降级提取器：Crawl4AI 不可用时的兜底，剥离导航/广告/页脚后转 Markdown
 
 auto 模式按 library → http → builtin 顺序尝试。
@@ -30,6 +30,22 @@ _BLOCK_TAGS = {
     "dd", "dt", "figcaption", "pre", "section", "article", "div",
 }
 _MAIN_HINTS = ("article", "main", "content", "post", "story", "detail", "text")
+# Crawl4AI 0.9.x 的 /crawl 请求体。旧版本只认 {"url": ...}，由 _via_http 负责回退。
+_CRAWL4AI_V095_CRAWLER_PARAMS: dict[str, Any] = {
+    "cache_mode": "BYPASS",
+    "wait_until": "domcontentloaded",
+    "word_count_threshold": 10,
+    "remove_overlay_elements": True,
+    "exclude_external_images": True,
+}
+_CRAWL4AI_V095_BROWSER_PARAMS: dict[str, Any] = {
+    "headless": True,
+    "text_mode": True,
+    "enable_stealth": True,
+    "locale": "zh-CN",
+    "viewport_width": 1280,
+    "viewport_height": 900,
+}
 # 正文容器特征：class/id 里出现这些词的多为文章正文
 _CONTENT_HINTS = (
     "content", "article", "post", "story", "detail", "text", "zw", "news_txt",
@@ -234,23 +250,47 @@ class CrawlClient:
         return str(raw).strip()
 
     async def _via_http(self, url: str) -> str:
+        """调用 Crawl4AI 服务的 HTTP 接口。
+
+        版本差异：0.9.x 的 /crawl 收 urls + browser_config + crawler_config，
+        老版本只认 {"url": ...}。先按新版打，422/404 再回退老版本，
+        这样容器换版本不用动客户端。
+        """
         base = self.settings.crawler_base_url.rstrip("/")
-        payload = {
+        headers = {"Content-Type": "application/json"}
+        token = self.settings.crawler_api_token.strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        v095_payload = {
+            "urls": [url],
+            "browser_config": {
+                "type": "BrowserConfig",
+                "params": dict(_CRAWL4AI_V095_BROWSER_PARAMS),
+            },
+            "crawler_config": {
+                "type": "CrawlerRunConfig",
+                "params": dict(_CRAWL4AI_V095_CRAWLER_PARAMS),
+            },
+        }
+        legacy_payload = {
             "url": url,
             "page_config": {"only_main_content": True},
             "f": "markdown",
         }
-        headers = {"Content-Type": "application/json"}
+
         async with httpx.AsyncClient(timeout=self.settings.crawler_timeout) as client:
-            try:
-                resp = await client.post(f"{base}/md", json=payload, headers=headers)
-            except httpx.HTTPError as exc:
-                raise CrawlError(f"无法连接 Crawl4AI 服务 ({base}): {exc}") from exc
-            if resp.status_code == 404:
-                try:
-                    resp = await client.post(f"{base}/crawl", json=payload, headers=headers)
-                except httpx.HTTPError as exc:
-                    raise CrawlError(f"无法连接 Crawl4AI 服务 ({base}): {exc}") from exc
+            resp = await self._post(client, f"{base}/crawl", headers, v095_payload)
+            if resp.status_code in {404, 422}:
+                # 老版本：正文走 /md；连 /md 都没有时再退到 /crawl
+                resp = await self._post(client, f"{base}/md", headers, legacy_payload)
+                if resp.status_code == 404:
+                    resp = await self._post(client, f"{base}/crawl", headers, legacy_payload)
+            if resp.status_code == 401:
+                raise CrawlError(
+                    "Crawl4AI 拒绝请求（HTTP 401）：缺少或错误的 CRAWL4AI_API_TOKEN"
+                    "（容器侧 CRAWL4AI_API_TOKEN 与客户端侧 CRAWLER_API_TOKEN 需一致）"
+                )
             if resp.status_code != 200:
                 raise CrawlError(f"Crawl4AI 返回 HTTP {resp.status_code}: {resp.text[:300]}")
             try:
@@ -258,6 +298,18 @@ class CrawlClient:
             except ValueError as exc:
                 raise CrawlError(f"Crawl4AI 返回的不是 JSON: {resp.text[:300]}") from exc
         return _extract_markdown(data)
+
+    @staticmethod
+    async def _post(
+        client: httpx.AsyncClient,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+    ) -> httpx.Response:
+        try:
+            return await client.post(url, json=payload, headers=headers)
+        except httpx.HTTPError as exc:
+            raise CrawlError(f"无法连接 Crawl4AI 服务 ({url}): {exc}") from exc
 
     async def _via_builtin(self, url: str) -> str:
         headers = {
@@ -285,6 +337,29 @@ def _extract_markdown(data: Any) -> str:
     if isinstance(data, str):
         return data.strip()
     if isinstance(data, dict):
+        # Crawl4AI 0.9.x：{"success": true, "results": [{"markdown": {"fit_markdown": ..., "raw_markdown": ...}}]}
+        # 先按这个结构精确取，避免递归时先撞上 media/metadata 里的杂字段。
+        results = data.get("results")
+        if isinstance(results, list):
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                md = item.get("markdown")
+                if isinstance(md, dict):
+                    fit = md.get("fit_markdown")
+                    raw = md.get("raw_markdown")
+                    fit_text = fit.strip() if isinstance(fit, str) else ""
+                    raw_text = raw.strip() if isinstance(raw, str) else ""
+                    # fit 是 Crawl4AI 的「正文挑选」结果；但它有时只挑出零星几句，
+                    # 那时宁可用完整（带导航的）raw，也不要半截正文。
+                    if fit_text and (not raw_text or len(fit_text) * 2 >= len(raw_text)):
+                        return fit_text
+                    if raw_text:
+                        return raw_text
+                    if fit_text:
+                        return fit_text
+                elif isinstance(md, str) and md.strip():
+                    return md.strip()
         for key in ("markdown", "raw_markdown", "fit_markdown"):
             value = data.get(key)
             if isinstance(value, str) and value.strip():

@@ -8,13 +8,15 @@
 ## 快速开始
 
 ```powershell
-# 1. 本地元搜索
-docker compose -f deploy/docker-compose.yml up -d searxng
+# 1. 元搜索与网页清洗（共享栈 searxng-crawl4ai，不在本仓库）
+cd <searxng-crawl4ai 所在目录>
+docker compose up -d          # searxng:8080 / crawl4ai:11235 / api:8000
 
 # 2. 依赖
+cd <回到本仓库>\Reading-Material-Crawler-Service
 py -3.12 -m venv .venv
 .\.venv\Scripts\pip.exe install -r requirements.txt
-copy .env.example .env      # 填 SUPABASE_SERVICE_ROLE_KEY
+copy .env.example .env      # 填 SUPABASE_SERVICE_ROLE_KEY；用 Crawl4AI 容器还要填 CRAWLER_API_TOKEN
 
 # 3. 启动
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8020
@@ -22,6 +24,27 @@ copy .env.example .env      # 填 SUPABASE_SERVICE_ROLE_KEY
 
 - 管理页面：<http://127.0.0.1:8020/>
 - 接口文档：<http://127.0.0.1:8020/docs>
+
+### 依赖服务与端口
+
+| 依赖 | 地址 | 是否必需 | 缺失时 |
+| --- | --- | --- | --- |
+| SearXNG 元搜索 | `http://127.0.0.1:8080` | 必需（建议） | 自动切 RSS 直采兜底通道，检索结果变少 |
+| Crawl4AI 网页清洗 | `http://127.0.0.1:11235` | 可选 | `CRAWLER_MODE=auto` 自动降级到内置提取器（剥离导航/广告/页脚） |
+| Supabase | `http://127.0.0.1:54321`（开发）/ 在线托管版（生产） | 必需 | 服务起不来 |
+
+**SearXNG 与 Crawl4AI 由共享栈 `searxng-crawl4ai` 提供**，本仓库不再自带这两个容器 ——
+两个 SearXNG 抢同一个 8080 端口只会有一台能起来。`deploy/docker-compose.yml` 里的
+两个服务挂在 `standalone` profile 上，默认不启动；独立部署（这台机器没有共享栈）时才用：
+
+```powershell
+docker compose -f deploy/docker-compose.yml --profile standalone up -d searxng
+docker compose -f deploy/docker-compose.yml --profile standalone up -d crawl4ai
+```
+
+Crawl4AI 0.9.x 默认开 Bearer 鉴权：容器侧 `CRAWL4AI_API_TOKEN` 与本服务 `.env` 里的
+`CRAWLER_API_TOKEN` 必须是同一个值，否则抓取一律 401。
+`/health` 与 `/api/v1/summarize` 的响应里会带实际生效的抓取引擎（`crawl_engine`）。
 
 ## 内置素材库管理页面
 
@@ -66,8 +89,16 @@ SearXNG 只是**元搜索入口**，真正取结果的是它背后的各个上�
 - `duckduckgo` / `brave` / `google cse` / `wikipedia` 会超时
 - `bing news` 走 JS 渲染，可能返回 0 条
 
-本机实测：容器 IP 下上述引擎基本不可用，检索会返回 0 候选 —— 服务会如实记录
-`dropped` / `errors` 并给出「无可用素材，切换备选主题或让上游用常青素材兜底」的提示（PRD §2.8）。
+本机实测（共享栈 searxng-crawl4ai，2026-11）：`brave.news` 能出结果且常命中白名单域名
+（thepaper.cn / people.com.cn / gmw.cn / xinhuanet.com），检索通道不必再走 RSS 兜底；
+但 `baidu` 返验证码、`sogou` 在部分镜像版本有兼容性 bug、`bing news` 走 JS 渲染可能返 0 条。
+
+**`time_range` 兼容性**：SearXNG 会跳过没开 `time_range_support` 的引擎，不同实例的引擎池
+不一样 —— 带上 `time_range` 可能反而一条都搜不出来。采集服务对此做了两层兜底：
+
+1. 带 `time_range` 搜到 0 条时，自动降级重试一次不限时，并在响应 `errors` 里写明；
+2. 降级后由本地按 `publishedDate` 过滤时效（窗口与 RSS 通道同口径：day=1 / week=7 / month=31 天）；
+   没有 `publishedDate` 的候选照留 —— 引擎不一定给日期，不能一刀切丢掉。
 
 排查与修复：
 
@@ -75,11 +106,11 @@ SearXNG 只是**元搜索入口**，真正取结果的是它背后的各个上�
 # 看引擎状态
 Invoke-RestMethod "http://127.0.0.1:8080/config" | Select-Object -ExpandProperty engines
 
-# 看某个引擎是否报错
-docker logs reading-searxng --tail 100
+# 看某个引擎是否报错（容器名随共享栈而定）
+docker logs searxng --tail 100
 ```
 
-- 换用可达的引擎：编辑 `deploy/searxng/settings.yml` 的 `engines:` 段后 `docker compose restart searxng`
+- 换用可达的引擎：编辑共享栈的 `searxng/settings.yml` 的 `engines:` 段后 `docker compose restart searxng`
 - 给 SearXNG 配代理：在 `settings.yml` 的 `outgoing.proxies.yml` 里加代理
 - 检索不可用时仍可用：**在管理页直接粘贴一条白名单新闻链接**（`/api/v1/summarize` 支持 `url` 入参），
   抓取 → 梗概 → 查重 → 入库这条链路不受影响

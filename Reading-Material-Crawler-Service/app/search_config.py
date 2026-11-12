@@ -70,8 +70,12 @@ class SearchConfig:
         entry = self.themes.get(theme) or {}
         return [str(k).strip() for k in (entry.get("keywords") or []) if str(k).strip()]
 
-    def rss_window_days(self, time_range: str) -> int | None:
-        """时间范围对应的天数窗口（None 表示不按时间过滤）。"""
+    def window_days(self, time_range: str) -> int | None:
+        """时间范围对应的天数窗口（None 表示不按时间过滤）。
+
+        SearXNG 与 RSS 两条通道共用这一口径：SearXNG 那条通道不一定支持
+        time_range 参数，届时由管线用 publishedDate 在本地按这个窗口兜住时效。
+        """
         return {"day": 1, "week": 7, "month": 31}.get(time_range)
 
     def theme_names(self) -> list[str]:

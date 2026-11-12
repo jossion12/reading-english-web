@@ -34,6 +34,53 @@ Reading-Web-Frontend                展示：日历 / 筛选 / 列表 / 联动�
 | 前端 | `vite dev` → `127.0.0.1:5173` | GitHub Pages `https://<user>.github.io/<repo>/` |
 | 配置模板 | 各服务 `.env.example` | 各服务 `.env.production.example` |
 
+### 服务与端口
+
+**对外提供（公网可达的只有两个）**
+
+| 服务 | 地址 | 说明 |
+| --- | --- | --- |
+| 学生阅读站（前端） | `https://<user>.github.io/<repo>/`（443） | GitHub Actions 推 main 自动构建发布；**只直连 Supabase，不请求后端** |
+| Supabase 在线托管版 REST | `https://<ref>.supabase.co`（443） | 数据底座。anon 键只能 `SELECT` 已发布文章，读不到 `source_log`，写入一律被 RLS 拒 |
+
+**内网服务（只监听 `127.0.0.1`，不对外暴露）**
+
+| 服务 | 默认端口 | 用途 |
+| --- | --- | --- |
+| 素材采集服务 | 8020 | 管理员；自带素材库管理页面 `/` 与接口文档 `/docs` |
+| 语篇生成服务 | 8010 | 管理员；接口文档 `/docs` |
+| 前端 `vite dev` | 5173 | 本地开发 |
+| Supabase 本地栈 REST（kong） | 54321 | 开发环境前后端访问 |
+| Supabase 本地栈 Postgres | 54322 | 直连调试 |
+
+两个后端的 CORS 只放行 `127.0.0.1` / `localhost`（采集服务：5173、8020；
+生成服务：5173、4173，即 vite dev 与 vite preview），所以它们部署到服务器后也只在本机监听，
+不需要反代、不需要额外鉴权。
+
+**依赖的外部服务**
+
+| 服务 | 地址 / 端口 | 用途 | 缺失时的行为 |
+| --- | --- | --- | --- |
+| SearXNG 元搜索 | `127.0.0.1:8080` | 检索候选新闻 | 自动切 RSS 兜底通道（白名单媒体直采） |
+| Crawl4AI 网页清洗 | `127.0.0.1:11235` | 正文清洗（**可选**） | `CRAWLER_MODE=auto` 自动降级到内置提取器 |
+| Ollama | `127.0.0.1:11434` | 开发环境 LLM | 改 `LLM_PROVIDER=openai` 切 DeepSeek |
+| DeepSeek | `api.deepseek.com`（443） | 生产环境 LLM | —— |
+| 白名单新闻站 | 出网 | 抓取素材正文 | —— |
+
+> **SearXNG 与 Crawl4AI 由共享栈 `searxng-crawl4ai` 提供**（同机三个容器：
+> `searxng`:8080 / `crawl4ai`:11235 / `api`:8000），本仓库不再自带这两个容器 ——
+> 两个 SearXNG 抢同一个 8080 端口只会有一台能起来，另一台直接
+> `port is already allocated`。共享栈没起也不影响本项目：检索走 RSS 兜底通道，
+> 清洗走内置降级提取器。
+>
+> Crawl4AI 0.9.x 默认开 Bearer 鉴权，采集服务 `.env` 里的 `CRAWLER_API_TOKEN`
+> 要和共享栈 `.env` 里的 `CRAWL4AI_API_TOKEN` 是同一个值，否则抓取一律 401。
+
+> ⚠️ 本地 Supabase 栈的 54321 / 54322 由 Supabase CLI 发布到 `0.0.0.0`，
+> **局域网内其他机器能连上**（SearXNG 则显式绑 `127.0.0.1`）。只在本机开发时无妨，
+> 共享网络下用 `supabase/config.toml` 的 `[db.network_restrictions]` 限制来源 CIDR，
+> 或在防火墙里拦掉这两个端口 —— 详见 `Reading-DB-Supabase/README.md`。
+
 ---
 
 ## 快速开始
@@ -62,12 +109,23 @@ py -3.12 scripts\verify_rls.py
 ### 2. 起采集服务
 
 ```powershell
-cd Reading-Material-Crawler-Service
-docker compose -f deploy/docker-compose.yml up -d searxng   # 本地元搜索
+# ① 先起共享依赖栈（SearXNG + Crawl4AI，在 searxng-crawl4ai 仓库里）
+cd <searxng-crawl4ai 所在目录>
+docker compose up -d          # searxng:8080 / crawl4ai:11235 / api:8000
+
+# ② 再起采集服务
+cd <回到本仓库>\Reading-Material-Crawler-Service
 py -3.12 -m venv .venv
 .\.venv\Scripts\pip.exe install -r requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8020
 ```
+
+采集服务读 `.env`（复制自 `.env.example`）。要连共享栈的 Crawl4AI 容器，
+把共享栈 `.env` 里的 `CRAWL4AI_API_TOKEN` 填到本服务 `.env` 的 `CRAWLER_API_TOKEN`。
+
+> 独立部署（这台机器上没有共享栈）时，用本仓库自带的编排：
+> `docker compose -f deploy/docker-compose.yml --profile standalone up -d searxng`
+> —— `--profile standalone` 是必须的，否则它不会启动（默认不启，避免和共享栈抢端口）。
 
 管理页面：<http://127.0.0.1:8020/>
 
@@ -161,6 +219,12 @@ LLM_API_KEY=sk-xxx
 
 **收藏只存本地**：收藏快照存在浏览器 localStorage，不上传云端，换浏览器或清缓存即丢失。
 
+**依赖服务共享化**：SearXNG 与 Crawl4AI 由本机的共享栈 `searxng-crawl4ai` 提供
+（`searxng`:8080 / `crawl4ai`:11235 / `api`:8000），本仓库不重复起容器 —— 两个 SearXNG
+抢同一个端口只会有一台能起来。采集端做了两层兼容：SearXNG 实例的引擎池不支持
+`time_range` 时，自动降级为不限时检索并改由本地按 `publishedDate` 过滤时效；
+Crawl4AI 0.9.x 要求 Bearer 鉴权且请求体格式与老版本不同，客户端按 422 回退，两种版本都能跑。
+
 ---
 
 ## 目录
@@ -178,7 +242,7 @@ Reading-English-Web/
 │   ├── app/clients/             SearXNG / Crawl4AI / LLM / Supabase
 │   ├── app/pipeline/            search / summarize / dedupe
 │   ├── app/static/              内置素材库管理页面
-│   └── deploy/                  SearXNG / Crawl4AI 容器编排
+│   └── deploy/                  独立部署模式用的 SearXNG / Crawl4AI 编排（standalone profile，默认不启动）
 ├── Reading-Article-Generate-Service/
 │   ├── app/clients/             LLM / Supabase
 │   ├── app/generator.py         生成 → 自检 → 预览 → 入库

@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     crawler_base_url: str = "http://127.0.0.1:11235"
     crawler_timeout: float = 120.0
     crawler_min_content_length: int = 200
+    # Crawl4AI 0.9.x 容器默认开启 Bearer 鉴权，没带对就是 401。
+    # 该实例若未设置 CRAWL4AI_API_TOKEN 则留空即可。
+    crawler_api_token: str = ""
 
     # --- LLM --------------------------------------------------------------
     llm_provider: str = "ollama"

@@ -18,6 +18,8 @@
 | Supabase | Docker 本地栈 `http://127.0.0.1:54321` | 在线托管版 `https://<ref>.supabase.co` |
 | 前端 | `vite dev` → `http://127.0.0.1:5173` | GitHub Pages `https://<user>.github.io/<repo>/` |
 | 采集 / 生成服务 | 本机 uvicorn | 服务器上常驻（systemd 或 Docker） |
+| 元搜索 | SearXNG `http://127.0.0.1:8080`（共享栈 `searxng-crawl4ai` 提供） | 同左，部署在同一台机器 |
+| 网页清洗 | Crawl4AI `http://127.0.0.1:11235`（可选，同一共享栈） | 同左；不启动则降级到内置提取器 |
 | 配置模板 | `.env.example` | `.env.production.example` |
 
 两套配置**用同一个服务、同一份代码**，只换环境变量：
@@ -128,6 +130,34 @@ py -3.12 Reading-DB-Supabase\scripts\verify_rls.py
 
 两个后端是管理用的内部服务，**不需要也不应该暴露到公网**。它们各自监听 127.0.0.1，需要时从服务器本地或 SSH 隧道访问。
 
+### 2.0 端口与暴露面
+
+部署前先对齐「哪个端口露在外面」，这是验收清单里最容易漏的一项。
+
+**公网可达的只有两个**
+
+| 服务 | 地址 | 说明 |
+| --- | --- | --- |
+| 学生阅读站（前端） | `https://<user>.github.io/<repo>/`（443） | GitHub Pages 静态托管；**只直连 Supabase，不请求后端** |
+| Supabase 在线托管版 REST | `https://<ref>.supabase.co`（443） | 数据底座；anon 键只能读已发布文章 |
+
+**只监听 `127.0.0.1`，留在内网**
+
+| 服务 | 端口 | 访问方式 |
+| --- | --- | --- |
+| 采集服务 | 8020 | 服务器本地 `curl`，或 SSH 隧道 `-L 8020:127.0.0.1:8020` |
+| 生成服务 | 8010 | 同上 |
+| SearXNG | 8080 | 只有采集服务连它，不对外（共享栈提供） |
+| Crawl4AI | 11235 | 可选，未启动则采集服务降级到内置提取器（共享栈提供） |
+
+两个后端的 CORS 只放行 `127.0.0.1` / `localhost`（采集服务：5173、8020；
+生成服务：5173、4173），所以**即使配了反向代理也不该对外开**；
+真要从公网用管理台，走 SSH 隧道。
+
+> 本地 Docker Supabase 栈的 54321 / 54322 由 Supabase CLI 发布到 `0.0.0.0`，
+> 局域网内其他机器能连上。共享网络下用 `supabase/config.toml` 的
+> `[db.network_restrictions]` 限制来源 CIDR，或用防火墙拦掉这两个端口。
+
 ### 2.1 准备主机
 
 一台 Linux 主机（Ubuntu 22.04+ / Debian 12+），装 Python 3.12 与 Docker：
@@ -192,16 +222,30 @@ anon 读不读得到 source_log（应该读不到）、DeepSeek 密钥与模型�
 
 ### 2.4 一起部署 SearXNG
 
-采集服务依赖 SearXNG 做检索。它是纯静态服务，和采集服务放同一台机器即可：
+采集服务依赖 SearXNG 做检索。它是纯静态服务，和采集服务放同一台机器即可。
+
+默认走共享栈 `searxng-crawl4ai`（本仓库不再自带 SearXNG 容器 —— 两个 SearXNG 抢同一个
+8080 端口只会有一台能起来）：
+
+```bash
+cd /opt/searxng-crawl4ai
+docker compose up -d          # searxng:8080 / crawl4ai:11235 / api:8000
+```
+
+服务器上没有共享栈时，用本仓库自带的独立编排（**必须带 `--profile standalone`**，
+否则不会启动）：
 
 ```bash
 cd /opt/reading/Reading-Material-Crawler-Service/deploy
-docker compose up -d searxng          # 监听 127.0.0.1:8080
+docker compose --profile standalone up -d searxng    # 监听 127.0.0.1:8080
 ```
 
 > SearXNG 的上游引擎在部分网络环境下不可用（验证码 / 超时 / JS 壳）。采集服务已内置
 > **RSS 直采兜底通道**：SearXNG 拿不到候选时自动改走白名单媒体的 RSS 频道，
 > 过滤规则完全一致，管理台会显式提示用了兜底通道。
+>
+> 另外采集服务对 `time_range` 做了降级：实例的引擎池不支持该参数时自动改用不限时检索，
+> 再由本地按 `publishedDate` 过滤时效 —— 两个实例的引擎池不同，时效口径保持一致。
 
 ### 2.5 启动与常驻
 
@@ -262,6 +306,28 @@ export SUPABASE_URL=https://<ref>.supabase.co
 export SUPABASE_ANON_KEY=<anon 键>
 ./Reading-Article-Generate-Service/.venv/bin/python scripts/e2e_smoke.py
 ```
+
+### 2.7 不部署到服务器，只在本机跑生产链路
+
+还没上服务器、但想先验证「DeepSeek + 在线 Supabase」这条真实链路是否通，
+可以在本机另起一套**生产模式**实例 —— 用 `APP_ENV=production` 换配置，端口换开，
+这样不影响正在跑的开发实例（开发 8020/8010，生产 8021/8011）：
+
+```powershell
+$env:APP_ENV = "production"
+
+cd Reading-Material-Crawler-Service
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8021
+
+cd ..\Reading-Article-Generate-Service
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8011
+```
+
+`/health` 里的 `env_file` 会显示 `.env.production`、`llm_model` 显示 `deepseek-flash`、
+`supabase_url` 显示在线地址 —— 三项都对才说明没起错配置。
+
+> ⚠️ 这套实例写的是**线上库**，跑采集/生成会直接改动生产数据。
+> 动手前先备份：把 `articles` 与 `source_log` 两张表导出成 JSON 留底。
 
 ---
 
@@ -367,7 +433,8 @@ JSON 模式的内容被输出上限截断时，DeepSeek 会把非 JSON 部分替
 云端模型比本机慢，把 `LLM_TIMEOUT` 调到 300 以上（默认值已是 300）。生成服务一篇 L3 文章可能要跑 1–2 分钟。
 
 **SearXNG 检索 0 候选**
-上游引擎在服务器网络环境下同样可能不可用。采集服务会自动切 RSS 兜底通道，管理台会显示提示。若想彻底解决，给 SearXNG 配代理（`deploy/searxng/settings.yml` 的 `outgoing.proxies.yml`）。
+上游引擎在服务器网络环境下同样可能不可用。采集服务会自动切 RSS 兜底通道，管理台会显示提示。若想彻底解决，给 SearXNG 配代理（共享栈 `searxng-crawl4ai` 的 `searxng/settings.yml` 里 `outgoing.proxies.yml`）。
+另外注意：不同实例的引擎池对 `time_range` 支持度不同，带 `time_range` 可能反而一条都搜不出来 —— 采集服务对此会自动降级为不限时检索，再由本地按 `publishedDate` 过滤时效。
 
 **RLS 挡住了 service_role**
 `service_role` 键用错了 —— 确认用的是 Dashboard → API 里的 **service_role**（不是 anon、不是 publishable）。新版 Supabase 的密钥格式是 `sb_secret_...` / `sb_publishable_...`，两个服务都要放在 `Authorization: Bearer <key>` 头上。

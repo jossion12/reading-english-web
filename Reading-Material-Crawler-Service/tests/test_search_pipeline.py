@@ -19,19 +19,32 @@ from app.search_config import SearchConfig
 
 
 class FakeSearXNG:
-    """假引擎：返回预设结果，并记录被调用的 query。"""
+    """假引擎：返回预设结果，并记录被调用的 query 与 time_range。"""
 
     def __init__(self, results_by_query: dict[str, list[RawResult]]) -> None:
         self.results_by_query = results_by_query
         self.calls: list[str] = []
+        self.time_ranges: list[str | None] = []
 
     async def search(self, query: str, **kwargs: object) -> list[RawResult]:
         self.calls.append(query)
+        self.time_ranges.append(kwargs.get("time_range"))  # type: ignore[arg-type]
         return self.results_by_query.get(query, [])
 
 
-def make_result(title: str, url: str, content: str = "摘要内容") -> RawResult:
-    return RawResult(title=title, url=url, content=content, engine="fake")
+def make_result(
+    title: str,
+    url: str,
+    content: str = "摘要内容",
+    published_date: str | None = None,
+) -> RawResult:
+    return RawResult(
+        title=title,
+        url=url,
+        content=content,
+        engine="fake",
+        published_date=published_date,
+    )
 
 
 def run(coro):
@@ -145,7 +158,92 @@ def test_query_templates_are_used() -> None:
 
     run(pipeline.run(theme="人与自然", keyword="湿地"))
 
-    assert fake.calls == ["湿地 生态"]
+    # 第一次带 time_range，空结果后降级重试一次不限时 —— 两次都是同一条模板 Query
+    assert fake.calls == ["湿地 生态", "湿地 生态"]
+    assert fake.time_ranges == ["week", None]
+
+
+class TimeRangeBlindSearXNG:
+    """模拟不支持 time_range 的 SearXNG 实例。
+
+    SearXNG 会跳过没开 time_range_support 的引擎，这种实例带 time_range 反而一条不出。
+    """
+
+    def __init__(self, results: list[RawResult]) -> None:
+        self.results = results
+        self.calls: list[str] = []
+        self.time_ranges: list[str | None] = []
+
+    async def search(self, query: str, **kwargs: object) -> list[RawResult]:
+        self.calls.append(query)
+        self.time_ranges.append(kwargs.get("time_range"))  # type: ignore[arg-type]
+        if kwargs.get("time_range"):
+            return []
+        return self.results
+
+
+def test_falls_back_when_instance_ignores_time_range() -> None:
+    """实例不支持 time_range 时应降级重试一次不限时，并留下可读的提示。"""
+    fake = TimeRangeBlindSearXNG(
+        [make_result("社区志愿者暖心服务", "https://www.news.cn/a.htm")]
+    )
+    cfg = SearchConfig()
+    cfg.data["rss_sources"] = []  # 本组用例只测 SearXNG 路径，关掉 RSS 兜底
+    cfg.data["themes"] = {"人与社会": {"queries": ["q1"], "keywords": []}}
+    pipeline = SearchPipeline(client=fake, config=cfg)  # type: ignore[arg-type]
+
+    outcome = run(pipeline.run(theme="人与社会"))
+
+    assert len(outcome.candidates) == 1
+    assert fake.time_ranges == ["week", None]
+    assert any("降级" in e for e in outcome.errors), outcome.errors
+
+
+def test_drops_candidates_older_than_window() -> None:
+    """降级成不限时检索后，本地按 publishedDate 兜住时效（与 RSS 通道同口径）。"""
+    fake = FakeSearXNG(
+        {
+            "q1": [
+                make_result(
+                    "很久以前发布的一条旧新闻报道",
+                    "https://www.news.cn/old.htm",
+                    published_date="2020-01-01T00:00:00",
+                ),
+                make_result(
+                    "今天刚刚发布的一条最新新闻报道",
+                    "https://www.news.cn/new.htm",
+                    published_date=datetime.now(timezone.utc).isoformat(),
+                ),
+            ]
+        }
+    )
+    cfg = SearchConfig()
+    cfg.data["rss_sources"] = []  # 这组用例只测 SearXNG 路径，关掉 RSS 兜底
+    cfg.data["themes"] = {"人与社会": {"queries": ["q1"], "keywords": []}}
+    pipeline = SearchPipeline(client=fake, config=cfg)  # type: ignore[arg-type]
+
+    outcome = run(pipeline.run(theme="人与社会", time_range="week"))
+
+    urls = [c.url for c in outcome.candidates]
+    assert "https://www.news.cn/new.htm" in urls
+    assert "https://www.news.cn/old.htm" not in urls
+    assert outcome.dropped["too_old"] == 1
+
+
+def test_keeps_candidates_without_published_date() -> None:
+    """没有 publishedDate 的候选照留 —— 引擎不一定给日期，不能一刀切丢掉。"""
+    fake = FakeSearXNG(
+        {"q1": [make_result("没有标注发布时间的新闻报道", "https://www.news.cn/a.htm")]}
+    )
+    cfg = SearchConfig()
+    cfg.data["rss_sources"] = []
+    cfg.data["themes"] = {"人与社会": {"queries": ["q1"], "keywords": []}}
+    pipeline = SearchPipeline(client=fake, config=cfg)  # type: ignore[arg-type]
+
+    outcome = run(pipeline.run(theme="人与社会", time_range="week"))
+
+    assert len(outcome.candidates) == 1
+    assert outcome.dropped["too_old"] == 0
 
 
 class SlowSearXNG:

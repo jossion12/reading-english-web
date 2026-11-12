@@ -54,8 +54,10 @@ foreach ($name in @("frontend", "generator", "crawler")) {
 
 if (-not $KeepContainers) {
     Write-Step "停止容器"
+    # 只停本项目「独立部署模式」起的 reading-searxng。
+    # 共享栈 searxng-crawl4ai 里的 searxng / crawl4ai 不归本脚本管，别误杀。
     Push-Location (Join-Path $root "Reading-Material-Crawler-Service\deploy")
-    try { docker compose stop searxng | Out-Null } catch { } finally { Pop-Location }
+    try { docker compose --profile standalone stop searxng | Out-Null } catch { } finally { Pop-Location }
 
     Push-Location (Join-Path $root "Reading-DB-Supabase")
     try { supabase stop | Out-Null } catch { } finally { Pop-Location }

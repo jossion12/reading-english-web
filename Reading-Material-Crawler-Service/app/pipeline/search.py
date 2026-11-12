@@ -30,6 +30,34 @@ def _recency(item: RssItem) -> float:
     return item.published_at.timestamp() if item.published_at else 0.0
 
 
+def _parse_published(value: str | None) -> datetime | None:
+    """解析 SearXNG 的 publishedDate，解析不了返回 None（当作「发布时间未知」）。
+
+    SearXNG 各引擎给的日期格式不统一：ISO（2026-11-12T08:30:00）、带空格的
+    秒级时间戳、只有日期（2026-11-12）都出现过，所以这里逐个试。
+    """
+    if not value:
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    parsed: datetime | None = None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d"):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                continue
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 @dataclass
 class Candidate:
     """候选新闻卡片（PRD §2.2 字段）。"""
@@ -111,6 +139,10 @@ class SearchPipeline:
         dropped = {"invalid_url": 0, "not_whitelisted": 0, "blacklist": 0, "short_title": 0, "duplicate": 0, "too_old": 0}
 
         searx_range = self.config.searxng_time_range(time_range)
+        # 时效窗口：SearXNG 实例不一定支持 time_range 参数（不支持的引擎会被整个跳过），
+        # 所以本地再按 publishedDate 兜一道，与 RSS 通道保持同一口径。
+        window_days = self.config.window_days(time_range)
+        now = datetime.now(timezone.utc)
 
         # SearXNG 阶段总时间预算：上游引擎全挂时，每条 Query 都要等满超时，
         # 管理员会干等好几分钟。预算用完就提前切到 RSS 兜底通道。
@@ -128,10 +160,7 @@ class SearchPipeline:
                 )
                 break
             try:
-                raw_results = await asyncio.wait_for(
-                    self.client.search(query, time_range=searx_range),
-                    timeout=remaining,
-                )
+                raw_results, degrade_note = await self._search(query, searx_range, deadline)
             except asyncio.TimeoutError:
                 outcome.budget_exhausted = True
                 outcome.errors.append(
@@ -141,6 +170,8 @@ class SearchPipeline:
             except SearXNGError as exc:
                 outcome.errors.append(f"Query「{query}」失败: {exc}")
                 continue
+            if degrade_note:
+                outcome.errors.append(degrade_note)
 
             for raw in raw_results:
                 candidate = self._to_candidate(raw, query)
@@ -162,6 +193,11 @@ class SearchPipeline:
                 if not candidate.summary and not keep_without_summary:
                     dropped["short_title"] += 1
                     continue
+                published = _parse_published(candidate.published_date)
+                if window_days and published is not None:
+                    if published < now - timedelta(days=window_days):
+                        dropped["too_old"] += 1
+                        continue
                 if candidate.url in seen:
                     dropped["duplicate"] += 1
                     continue
@@ -188,6 +224,42 @@ class SearchPipeline:
         return outcome
 
     # ------------------------------------------------------------------
+    # SearXNG 单条 Query
+    # ------------------------------------------------------------------
+    async def _search(
+        self,
+        query: str,
+        searx_range: str | None,
+        deadline: float,
+    ) -> tuple[list[RawResult], str | None]:
+        """跑一条 Query，返回 (结果, 降级说明)。
+
+        带 time_range 搜不到时自动降级重试一次不限时。不同 SearXNG 实例的引擎池
+        对 time_range 的支持度不一样：SearXNG 会跳过没开 time_range_support 的引擎，
+        碰上这种实例，带参数反而一条都搜不出来。降级后由本地 publishedDate 兜时效。
+        """
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.5:
+            raise asyncio.TimeoutError
+        results = await asyncio.wait_for(
+            self.client.search(query, time_range=searx_range),
+            timeout=remaining,
+        )
+        if results or not searx_range:
+            return results, None
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.5:
+            raise asyncio.TimeoutError
+        results = await asyncio.wait_for(self.client.search(query), timeout=remaining)
+        if not results:
+            return results, None
+        return results, (
+            f"Query「{query}」的 time_range={searx_range} 未被该 SearXNG 实例支持，"
+            "已降级为不限时检索（改由本地 publishedDate 过滤时效）"
+        )
+
+    # ------------------------------------------------------------------
     # RSS 兜底通道
     # ------------------------------------------------------------------
     async def _run_rss_fallback(
@@ -207,7 +279,7 @@ class SearchPipeline:
 
         tokens = [t for t in (keyword or "").split() if len(t) >= 2]
         theme_keywords = self.config.theme_keywords(theme)
-        window_days = self.config.rss_window_days(time_range)
+        window_days = self.config.window_days(time_range)
         now = datetime.now(timezone.utc)
 
         scored: list[tuple[int, RssItem, str]] = []
