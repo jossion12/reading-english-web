@@ -49,6 +49,28 @@ supabase stop
 > 本项目 `supabase/config.toml` 里关掉了 studio / storage / realtime / analytics / edge-runtime，
 > 只保留 db + api + auth，减少镜像下载量与内存占用。
 
+### 本地端口
+
+| 端口 | 容器 | 用途 |
+| --- | --- | --- |
+| 54321 | kong（REST API） | 两个后端与前端访问的 PostgREST 入口 |
+| 54322 | db（Postgres 17） | 直连调试、跑 SQL |
+
+> ⚠️ 这两个端口由 Supabase CLI 生成的 compose 发布到 `0.0.0.0`，**局域网内其他机器能连上**
+> （同仓库的 SearXNG 则显式绑 `127.0.0.1`）。只在本机开发时无妨；共享网络下两种收紧方式：
+>
+> 1. **限制数据库来源**（本仓库 `supabase/config.toml` 已预留这段，改 `enabled = true` 即可）：
+>    ```toml
+>    [db.network_restrictions]
+>    enabled = true
+>    allowed_cidrs = ["127.0.0.1/32"]
+>    allowed_cidrs_v6 = ["::1/128"]
+>    ```
+> 2. **拦掉端口**：在 Windows 防火墙里对 54321 / 54322 加一条仅限本机的入站规则。
+>
+> `config.toml` 里没有 API 端口绑定地址的选项（`[api].port` 只管端口号），
+> 所以要连 REST 一起收紧，得靠防火墙。
+
 ## 迁移文件
 
 - `supabase/migrations/20261111140000_init_reading_schema.sql` —— 建表、索引、外键、RLS 策略、管理员函数
