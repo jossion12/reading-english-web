@@ -6,7 +6,7 @@
   "description": "Reading-English-Web 学生阅读前端站点（只读）",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/postbuild.mjs",
+    "build": "tsc -b && vite build && node scripts/postbuild.mjs && node scripts/export-articles.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

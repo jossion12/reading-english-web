@@ -89,7 +89,7 @@ function SiteShell() {
       </main>
 
       <footer className="app-foot">
-        文章来自 Supabase · 收藏与字体设置只存在这台设备上
+        文章随站点发布更新 · 收藏与字体设置只存在这台设备上
       </footer>
 
       <TabBar />

@@ -40,7 +40,7 @@ Reading-Web-Frontend                展示：日历 / 筛选 / 列表 / 联动�
 
 | 服务 | 地址 | 说明 |
 | --- | --- | --- |
-| 学生阅读站（前端） | `https://<user>.github.io/<repo>/`（443） | GitHub Actions 推 main 自动构建发布；**只直连 Supabase，不请求后端** |
+| 学生阅读站（前端） | `https://<user>.github.io/<repo>/`（443） | GitHub Actions 推 main 自动构建发布；**首屏读同域 `articles.json` 快照，不请求后端** |
 | Supabase 在线托管版 REST | `https://<ref>.supabase.co`（443） | 数据底座。anon 键只能 `SELECT` 已发布文章，读不到 `source_log`，写入一律被 RLS 拒 |
 
 **内网服务（只监听 `127.0.0.1`，不对外暴露）**
@@ -162,6 +162,43 @@ npm run dev
 > 点名失败的服务；`stop.ps1` 杀进程树 + 按端口兜底，避免留下占着端口的孤儿进程。
 > 脚本存为带 BOM 的 UTF-8，Windows PowerShell 5.1 与 PowerShell 7 都能直接运行。
 
+### 按日采集工作流（Bing 新闻 + 本机代理）
+
+Bing 新闻垂直引擎依赖本机代理 `jumengcloudCore`（监听 `127.0.0.1:7892`）。
+共享栈 `searxng-crawl4ai/docker-compose.yml` 已给 `searxng` 注入
+`HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`，`bing news` 引擎已启用。每天的顺序：
+
+```powershell
+# ① 先打开代理客户端（7892 开始监听），再起共享栈 SearXNG
+cd <searxng-crawl4ai 所在目录>
+docker compose up -d searxng
+docker compose ps                  # 确认 healthy
+
+# ② 起本项目服务（start.ps1 只探活共享栈，不代管它的生命周期）
+cd <回到本仓库>
+.\scripts\start.ps1
+# 浏览器打开 http://127.0.0.1:5173/ ：找素材 → 打分/提炼 → 生成服务预览并 commit
+
+# ③ 用完先停共享栈容器，再关代理客户端
+cd <searxng-crawl4ai 所在目录>
+docker compose stop searxng
+cd <回到本仓库>
+.\scripts\stop.ps1
+```
+
+几个容易踩的点：
+
+- 代理是**按请求实时连接**的，环境变量只是固定地址。代理重新打开后**不需要重建容器**，
+  `docker compose up -d --force-recreate` 只在改过 compose 时才需要（改环境变量不能靠 `restart`）。
+- 代理关闭期间若 `searxng` 仍在运行，所有引擎（含国内引擎）都会 `curl(7) over proxy` 失败；
+  但 `healthz` 走 `NO_PROXY=127.0.0.1,localhost,::1`，仍返回 200 —— 容器**看起来 healthy 实则不可用**，
+  共享栈的其他使用方也会受影响。所以务必先停容器再关代理。
+- `start.ps1` / `stop.ps1` 有意不代管共享栈（见脚本注释），别以为 `stop.ps1` 会停掉 SearXNG。
+- 代理没开仍能采集：检索会自动切到 `config/search.yaml` 的 RSS 直采兜底，只是没有 Bing 新闻结果。
+  实测代理开启时 Bing 贡献约 8~11 条候选/主题。
+- `config/search.yaml` 每个主题末尾的 `site:` 限定 Query 让 Bing 结果落在
+  `domain_whitelist` 内（实测命中 10/10），因此**不需要放宽媒体白名单**。
+
 ---
 
 ## 端到端冒烟测试
@@ -267,7 +304,7 @@ Reading-English-Web/
 
 1. **Supabase 在线版** —— 建项目 → `supabase link` + `supabase db push` 应用迁移 → 从 Project Settings → API 拿 URL / anon 键 / service_role 键 → 跑 `verify_rls.py` 验权限隔离
 2. **后端服务** —— 服务器上装依赖，拷 `.env.production.example` 填 DeepSeek 密钥 + 在线 Supabase 密钥，用 systemd 常驻；采集服务旁边的 SearXNG 用 `deploy/docker-compose.yml` 一起起
-3. **前端 → GitHub Pages** —— 推 main 分支触发 `.github/workflows/deploy-pages.yml`；在 Actions Secrets 里配 `VITE_SUPABASE_URL` 与 `VITE_SUPABASE_ANON_KEY`，Settings → Pages 的 Source 选 GitHub Actions
+3. **前端 → GitHub Pages** —— 推 main 分支触发 `.github/workflows/deploy-pages.yml`；在 Actions Secrets 里配 `VITE_SUPABASE_URL` 与 `VITE_SUPABASE_ANON_KEY`，Settings → Pages 的 Source 选 GitHub Actions。构建会用 anon 密钥导出 `dist/articles.json` 快照，缺快照时部署直接失败
 
 几个部署前值得知道的事：
 
@@ -281,7 +318,11 @@ Reading-English-Web/
   与 `check_prod_connectivity.py`（真实打一次线上接口：表结构在不在、RLS 是否隔离、DeepSeek 能否回话）
 - **密钥不写死在代码里**：`verify_rls.py` 与 `e2e_smoke.py` 改成从环境变量 / `.env` 读，
   根 `.gitignore` 排除了所有 `.env`、`node_modules`、`dist`、`.venv`
-- **前端只直连 Supabase**，不请求后端服务，所以部署不需要 CORS 配置，后端可以一直留在内网
+- **前端首屏读同域文章快照**：构建时 `scripts/export-articles.mjs` 用 anon 密钥把已发布文章导出成
+  `dist/articles.json`，随 Pages 一起发布。国内手机网络常连不上 `*.supabase.co`（表现为
+  `TypeError: Failed to fetch`、整页 0 篇），浏览器只读同域文件就不受影响；Supabase 退为
+  「能连上时」的后台增强，失败静默。工作流每天 20:30（北京）定时重建刷新快照，**缺快照时部署直接失败**，
+  避免发出读不到文章的版本。前端始终不请求后端服务，后端可一直留在内网
 - **Vite 环境变量在构建时编译进产物**：改了 Supabase 地址要重新跑一次部署才生效
 - **Pages 站点挂在子路径**：`vite.config.ts` 的 `base` 自动取 `/<仓库名>/`，
   `BrowserRouter` 的 `basename` 跟着走；深链靠构建时复制出的 `404.html` 回退
