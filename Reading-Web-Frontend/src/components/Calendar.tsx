@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ArrowLeftIcon, ArrowRightIcon } from "./Icons";
 
 interface CalendarProps {
   /** 有文章的日期集合，格式 YYYY-MM-DD */
@@ -24,6 +25,12 @@ function mondayFirstIndex(year: number, month: number): number {
   return (jsDay + 6) % 7;
 }
 
+/**
+ * 日历（PRD §2.1）：只标记有文章的日期，点一下即可选中。
+ *
+ * 在手机上它活在一个底部弹层里，所以格子做得比按钮下限大一圈，
+ * 拇指点得中才是重点。
+ */
 export function Calendar({ activeDates, selectedDate, onSelectDate }: CalendarProps) {
   const today = useMemo(() => new Date(), []);
   const cursor = useMemo(
@@ -55,13 +62,13 @@ export function Calendar({ activeDates, selectedDate, onSelectDate }: CalendarPr
     <div className="calendar">
       <div className="calendar-head">
         <button type="button" className="icon-btn" onClick={() => shift(-1)} aria-label="上一月">
-          ‹
+          <ArrowLeftIcon />
         </button>
         <strong>
           {view.year} 年 {view.month + 1} 月
         </strong>
         <button type="button" className="icon-btn" onClick={() => shift(1)} aria-label="下一月">
-          ›
+          <ArrowRightIcon />
         </button>
         {view.year !== today.getFullYear() || view.month !== today.getMonth() ? (
           <button type="button" className="link-btn" onClick={() => setView(cursor)}>
@@ -89,8 +96,8 @@ export function Calendar({ activeDates, selectedDate, onSelectDate }: CalendarPr
               className={[
                 "calendar-cell",
                 hasArticle ? "has-article" : "",
-                isSelected ? "selected" : "",
-                isToday ? "today" : "",
+                isSelected ? "is-selected" : "",
+                isToday ? "is-today" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -105,11 +112,15 @@ export function Calendar({ activeDates, selectedDate, onSelectDate }: CalendarPr
       </div>
 
       {selectedDate ? (
-        <button type="button" className="link-btn calendar-clear" onClick={() => onSelectDate(null)}>
+        <button
+          type="button"
+          className="link-btn calendar-clear"
+          onClick={() => onSelectDate(null)}
+        >
           清除日期筛选（{selectedDate}）
         </button>
       ) : (
-        <p className="calendar-hint">圆点表示当天有文章，点击可选中。</p>
+        <p className="calendar-hint">圆点表示当天有文章，点一下就能只看那天的文章。</p>
       )}
     </div>
   );

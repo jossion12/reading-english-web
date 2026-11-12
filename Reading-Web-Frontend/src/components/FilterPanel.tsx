@@ -1,4 +1,5 @@
 import type { Filters } from "../types";
+import { levelMeta } from "../lib/levels";
 
 interface FilterPanelProps {
   filters: Filters;
@@ -13,13 +14,15 @@ interface GroupProps {
   options: string[];
   selected: string[];
   onToggle: (value: string) => void;
+  /** 按钮上显示的文字，默认就是选项本身 */
+  format?: (value: string) => string;
 }
 
-function Group({ title, options, selected, onToggle }: GroupProps) {
+function Group({ title, options, selected, onToggle, format }: GroupProps) {
   if (options.length === 0) return null;
   return (
     <div className="filter-group">
-      <h4>{title}</h4>
+      <h4 className="filter-group-title">{title}</h4>
       <div className="filter-options">
         {options.map((option) => {
           const active = selected.includes(option);
@@ -27,11 +30,11 @@ function Group({ title, options, selected, onToggle }: GroupProps) {
             <button
               type="button"
               key={option}
-              className={`chip${active ? " active" : ""}`}
+              className={`chip${active ? " is-active" : ""}`}
               onClick={() => onToggle(option)}
               aria-pressed={active}
             >
-              {option}
+              {format ? format(option) : option}
             </button>
           );
         })}
@@ -40,6 +43,7 @@ function Group({ title, options, selected, onToggle }: GroupProps) {
   );
 }
 
+/** 主题 / 文体 / 难度 多选过滤（PRD §2.2）。 */
 export function FilterPanel({
   filters,
   onChange,
@@ -55,7 +59,7 @@ export function FilterPanel({
     onChange({ ...filters, [key]: next });
   };
 
-  const hasAny = filters.themes.length + filters.levels.length + filters.styles.length > 0;
+  const activeCount = filters.themes.length + filters.levels.length + filters.styles.length;
 
   return (
     <div className="filter-panel">
@@ -76,13 +80,17 @@ export function FilterPanel({
         options={available.levels}
         selected={filters.levels}
         onToggle={(v) => toggleIn("levels", v)}
+        format={(v) => {
+          const meta = levelMeta(v);
+          return meta.label ? `${meta.short} ${meta.label}` : v;
+        }}
       />
 
       <div className="filter-foot">
         <span className="filter-count">
           命中 {resultCount} / {totalCount} 篇
         </span>
-        {hasAny ? (
+        {activeCount > 0 ? (
           <button
             type="button"
             className="link-btn"
