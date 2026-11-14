@@ -2,7 +2,7 @@
 -- Reading-English-Web · 在线 Supabase 一键初始化脚本
 --
 -- 用途：没有 supabase CLI 时，在 Supabase 控制台 → SQL Editor 里整段粘贴执行。
--- 内容 = 建表迁移 + RLS 策略 + 种子数据（7 篇文章 / 3 条素材）。
+-- 内容 = 建表迁移 + RLS 策略 + P0 增量列 + 种子数据（7 篇文章 / 3 条素材）。
 -- 可重复执行（建表/索引/策略都是幂等的）。
 --
 -- 执行后自检：
@@ -71,6 +71,16 @@ comment on column public.articles.chinese_paras is '中文段落数组';
 comment on column public.articles."sort" is '同一天文章排序序号';
 comment on column public.articles.is_published is '是否对外展示';
 comment on column public.articles.source_id is '外键关联 source_log.id，常青素材可为 null';
+
+-- ===== P0 语言修复 R5：读后思考两列 =====
+-- 「正向导向」原被派进正文末段，现改由生成服务单独输出、前端折叠展示。
+-- 两列可空，存量文章为 null；RLS 按行放行，策略无需改动。
+alter table public.articles
+  add column if not exists reflection_en text,
+  add column if not exists reflection_cn text;
+
+comment on column public.articles.reflection_en is '读后思考（英文一句），与正文分离，仅折叠展示';
+comment on column public.articles.reflection_cn is '读后思考（中文一句），与正文分离，仅折叠展示';
 
 -- PRD §3.2 —— publish_date 索引（日历按日期查询）
 create index if not exists articles_publish_date_idx

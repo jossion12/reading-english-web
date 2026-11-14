@@ -27,7 +27,8 @@ expansion:
     Every fact above must be used, and only where the assignment says. The passage may
     NOT contain any fact that is not in this list. If you need more sentences in a
     paragraph, unpack the assigned facts further — split one fact into two sentences,
-    describe the same event step by step, or restate the same fact in different words.
+    or describe the same event step by step. Each sentence must still add information
+    or an angle that the previous sentences have not given.
     NEVER introduce a new fact to fill the space.
 
     ## Forbidden (the material says so explicitly)
@@ -78,12 +79,16 @@ expansion:
          so never write a single "a student"); keep the material's own count.
        Every noun, modifier, number, place and reason in your passage must already
        appear in the material. Adding even one of them makes the passage unusable.
-    5e. Keep every proper noun, place name, school, organisation, number and unit
-       EXACTLY as the material writes it: 黔东南 → QianDongNan (or "a mountainous area
-       in the province"), 三小时 → three hours, 两座山头 → two mountain tops.
-       If you are not sure how a Chinese name is written in English, describe it
-       generically ("a mountainous area in the province") instead of inventing a name.
-       Never invent a place, a school, a village, a road or a person's name.
+    5e. Use the SHORTEST natural English form for every place name. First mention:
+       the most specific level only (the community, the school, the river, the
+       township), never stacked administrative levels — write "Hedong Community",
+       not "Hedong Community in Heshan District, Hebi City". Afterwards refer to it
+       as "the community" / "the school" / "it". If a pinyin name would be hard for
+       a 12-year-old English learner to read, use a generic description instead
+       ("a small town in Xinjiang", "a primary school in Zhengzhou"). Never invent
+       a place name, and keep numbers and units exactly as the material writes them.
+       Keep other proper nouns (school, organisation, person) exactly as the material
+       writes them; if unsure, describe them generically rather than inventing a name.
     5f. Never write a statement about what did NOT happen ("she did not stay home that
        day", "no one helped her", "the books were not for the poor"), never add a time
        qualifier the material does not give ("today", "that day", "before the term
@@ -92,20 +97,42 @@ expansion:
     6. Write plain prose paragraphs separated by blank lines. No markdown headings,
        no bullet points, no numbering inside a paragraph.
 
+    ## Voice and style (hard rules — violation makes the passage unusable)
+    - Write like a native-English journalist writing for teenagers. The text must
+      read as if it was originally written in English. A native speaker must NOT be
+      able to tell it was translated from Chinese.
+    - Never translate Chinese official phraseology word for word. Expressions like
+      "new era civilization practice", "empower...", "carry out a ... action",
+      "play a leading and example-setting role", "build the idea of",
+      "raise the awareness of civilization", "The reporter learned from..." are
+      Chinglish and are forbidden. When the material only contains such officialese,
+      describe the concrete action in plain everyday English instead.
+    - Never say the same thing twice. Each sentence must add information or an
+      angle that the previous sentences have not given. Do NOT restate a fact "from
+      the other side" and do NOT repeat key words as filler. If two sentences in
+      your draft convey the same content, keep the plainer one and delete the other.
+    - Short noun stacks and plain verbs over abstract nouns: "students built towers
+      from paper cups" is right; "a paper cup tower challenge activity was carried
+      out" is wrong.
+    - Never address the reader directly ("This tells Grade 7 students to...",
+      "You should...") inside the passage paragraphs.
+
     ## How to reach the word count WITHOUT inventing facts
     The passage has to be long enough, but length may only come from the material.
     These are the only moves you may use:
-    - Unpack one material sentence into several English sentences.
-    - Restate the same fact from the other side, in the material's own words.
+    - Unpack one material sentence into several English sentences, each adding a
+      new piece of information already in that sentence.
     - Walk through the sequence the material already describes, one step at a time.
       If the material says she walked three hours over two hills, you may describe the
       walking, the three hours and the two hills — you may NOT say it was dark, that
       she slipped, or that she nearly gave up.
     - The material usually ends with its significance (背景意义). Use it as the closing
-      paragraph, keeping its wording. It is part of the material, so it is allowed.
-    - Repeat the material's own key words instead of introducing new ones.
+      paragraph, keeping its meaning but in plain natural English. It is part of the
+      material, so it is allowed.
     Never invent a fact to fill the space. A passage that stays inside the material is
-    always better than a longer one that adds anything.
+    always better than a longer one that adds anything. Do not repeat a fact just to
+    add words: a shorter passage that is short of the word range is better than one
+    that says the same thing twice.
 
     ## Required shape
     - Write exactly {{para_count}} paragraphs in the English array, and exactly
@@ -128,13 +155,25 @@ expansion:
     paragraph between {{para_min}} and {{para_max}} words.
     Do not stop early — every paragraph must be developed, not just stated.
 
+    ## Student reflection (separate from the passage — do NOT mix)
+    The material ends with a 正向导向 line addressed to Grade 7 students:
+    <<<REFLECTION
+    {{reflection}}
+    REFLECTION>>>
+    It must NOT appear in the passage paragraphs. Output it as two extra JSON fields
+    after the passage: one English sentence and its Chinese translation, warm and
+    plain, with no new facts and no lecturing. If the material has no 正向导向 line,
+    set both fields to an empty string.
+
     ## Output format
     Reply with a single JSON object and nothing else:
     {
       "title_en": "English title, max 12 words",
       "title_cn": "Chinese title",
       "english_paras": ["paragraph 1", "paragraph 2"],
-      "chinese_paras": ["段落一", "段落二"]
+      "chinese_paras": ["段落一", "段落二"],
+      "reflection_en": "One short sentence (<= 20 words) addressed to Grade 7 students",
+      "reflection_cn": "对应的中文一句"
     }
 
   levels:
@@ -207,6 +246,23 @@ evergreen:
     3. Do NOT output exercises, vocabulary annotations, questions, answers or commentary.
     4. Use only widely accepted textbook knowledge. No invented precise numbers.
 
+    ## Voice and style (hard rules — violation makes the passage unusable)
+    - Write like a native-English journalist writing for teenagers. The text must
+      read as if it was originally written in English. A native speaker must NOT be
+      able to tell it was translated from Chinese.
+    - Never translate Chinese official phraseology word for word ("empower...",
+      "carry out a ... action", "build the idea of", "The reporter learned from...").
+      Describe the concrete action in plain everyday English instead.
+    - Never say the same thing twice. Each sentence must add information or an
+      angle that the previous sentences have not given. Do NOT restate a fact "from
+      the other side" and do NOT repeat key words as filler.
+    - Short noun stacks and plain verbs over abstract nouns: "students built towers
+      from paper cups" is right; "a paper cup tower challenge activity was carried
+      out" is wrong.
+    - Never address the reader directly ("This tells Grade 7 students to...",
+      "You should...") inside the passage paragraphs. Never close the passage with
+      a moral lesson or a comment on what students should learn.
+
     ## Required shape
     - Write exactly {{para_count}} paragraphs in the English array, and exactly
       {{para_count}} paragraphs in the Chinese array.
@@ -242,8 +298,9 @@ evergreen:
 # --------------------------------------------------------------------------
 self_check:
   system: |
-    You are a strict quality checker for graded English reading passages. You always
-    answer with a single raw JSON object and never wrap it in a markdown code fence.
+    You are a native-English-speaking junior-high reading teacher and a strict
+    quality checker for graded English reading passages. You always answer with a
+    single raw JSON object and never wrap it in a markdown code fence.
 
   template: |
     ## Source material (the ONLY source of facts)
@@ -310,6 +367,18 @@ self_check:
     3. para_match — are the English and Chinese paragraph counts equal?
     4. no_sensitive — is the passage free of violence, crime, disaster, death, war,
        politics, religion, sexual content, and other material unsuitable for a 12-year-old?
+    5. natural_english — does the passage read like natural English written by a
+       native speaker, or like Chinese translated word for word? Flag ONLY concrete
+       problems you can quote: word-for-word official phraseology ("new era
+       civilization practice", "play a leading and example-setting role", "build
+       the idea of", "The reporter learned from"); stacked pinyin administrative
+       names ("... Community in ... District, ... City"); awkward collocations a
+       native writer would not produce; sentences that lecture the reader or close
+       the news passage with a moral lesson ("This tells Grade 7 students to...").
+       Do NOT flag plain simple English.
+    6. no_repetition — does any sentence restate the content of an earlier sentence
+       with nearly the same words and no new information? Flag ONLY the repeated
+       sentence you can quote, not a vague feeling that the passage is long.
 
     ## How to write issues
     Write every issue as ONE instruction of at most 30 words naming the exact text to
@@ -317,6 +386,9 @@ self_check:
       "Delete this sentence: 'The journey continued through the cold wind.'"
       "In 'Her route went across two distinct mountain tops.', remove 'distinct'."
     When only ONE word is wrong, name that word instead of the whole sentence.
+    For natural_english and no_repetition, also quote the exact sentence so the writer
+    knows which one to rewrite or delete. A passage written in plain, simple English is
+    fine — do not flag it for being easy.
     No explanations, no hedging, no "acceptable", no "though not strictly a fabrication".
 
     ## Before you report an issue
@@ -336,5 +408,7 @@ self_check:
       "no_fabrication": true,
       "para_match": true,
       "no_sensitive": true,
+      "natural_english": true,
+      "repetition_free": true,
       "issues": ["one short sentence per problem found, empty array when all good"]
     }

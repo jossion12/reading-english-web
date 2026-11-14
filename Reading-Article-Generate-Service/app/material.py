@@ -1,4 +1,4 @@
-"""素材梗概解析：把五段式梗概拆成「事实句」与「禁止项」。
+"""素材梗概解析：把六行式梗概拆成「事实句」「禁止项」与「读后思考」。
 
 采集服务产出的梗概是带标签的分段文本，例如：
 
@@ -7,26 +7,44 @@
                翻越两座山头，到学生家中进行家访并送上课本。
     背景意义：乡村教育工作者在恶劣天气下仍坚持家访，保障了偏远山区学生不因天气缺课。
     正向导向：展现教师的责任心与奉献精神，引导学生理解什么是真正的关爱与坚持。
+    地名清单：黔东南（略去上级行政层级）
     禁止加入内容：不得编造教师姓名、学校名称、受访学生家庭细节……
 
 为什么要拆：一条梗概真正能支撑的事实只有 7~8 条，而 L2 要求 4 段 × 4~5 句
 （16~20 句）。差额只能靠编造填满 —— 实测模型正是这么干的
 （凭空造出「学生需要帮助」「她从学校出发」）。把事实摊开、并按段落派活，
 模型就有了明确且有限的活儿，编造率明显下降。
+
+P0 语言修复 R3：「正向导向」从设计之初就是写给初一学生的教育评论，若与事实句
+平级进入逐段派活，正文末段必然产出 "Junior One students can learn from this..."
+式的说教段。因此这里把它单独返回，只用于渲染读后思考字段，绝不进 facts。
+「地名清单」是备查信息，同样不进事实清单 —— 否则四级行政路径会被模型原样搬进正文。
 """
 
 from __future__ import annotations
 
 import re
 
-#: 梗概里承载事实的段落标签
-FACT_SECTIONS = ("核心事实", "背景意义", "正向导向", "主题", "细节", "正文")
+#: 梗概里承载事实的段落标签（正向导向已剥离，见模块 docstring）
+FACT_SECTIONS = ("核心事实", "背景意义", "主题", "细节", "正文")
 
 #: 标题类标签 —— 标题是压缩过的标题句，不进事实清单（容易诱导模型造名字）
 TITLE_SECTIONS = ("新闻标题", "标题")
 
 #: 禁止项标签 —— 采集时给出的「不许写什么」，原样传给扩写模型
 PROHIBIT_SECTIONS = ("禁止加入内容", "禁止内容", "注意事项")
+
+#: 读后思考标签 —— 面向学生的教育引导，单独输出，不进正文
+REFLECTION_SECTIONS = ("正向导向", "读后思考")
+
+#: 备查字段标签 —— 地名清单只供人工核对，不进事实清单也不进正文
+META_SECTIONS = ("地名清单",)
+
+#: 所有已知标签。未登记的标签会被当成上一节的续行，新增字段必须登记在这里。
+KNOWN_SECTIONS = (
+    FACT_SECTIONS + TITLE_SECTIONS + PROHIBIT_SECTIONS
+    + REFLECTION_SECTIONS + META_SECTIONS
+)
 
 #: 句子切分（中英文标点都算）
 _SENT_SPLIT = re.compile(r"[。！？；!?;\n]+")
@@ -40,11 +58,17 @@ _LABEL = re.compile(r"^\s*([^：:]{2,12})\s*[：:]\s*(.*)$")
 #: 太短的碎片当不了事实（「翻过两座山」只有 5 个字，也是有效事实，不能丢）
 _MIN_FACT_LEN = 5
 
+#: 采集模板里的字段说明偶尔被模型当成正文一起输出，这些元说明不能进读后思考
+_REFLECTION_META = ("此字段仅供", "绝不进入阅读正文", "不进入阅读正文", "仅供生成")
 
-def split_material_sections(summary: str) -> tuple[list[tuple[str, list[str]]], list[str]]:
-    """把梗概按段拆开，返回 (每段的 (标签, 事实句), 禁止项)。
 
-    事实句保留中文原文（模型读中文更准），不做翻译。
+def split_material_sections(
+    summary: str,
+) -> tuple[list[tuple[str, list[str]]], list[str], str]:
+    """把梗概按段拆开，返回 (每段的 (标签, 事实句), 禁止项, 读后思考原文)。
+
+    事实句保留中文原文（模型读中文更准），不做翻译。存量 5 行格式（无地名清单）
+    也能解析：缺 6 行不报错，读后思考为空字符串。
     """
     sections: list[tuple[str, str]] = []
     for raw_line in (summary or "").splitlines():
@@ -53,7 +77,7 @@ def split_material_sections(summary: str) -> tuple[list[tuple[str, list[str]]], 
             continue
         match = _LABEL.match(line)
         label = match.group(1).strip() if match else ""
-        if label in FACT_SECTIONS or label in TITLE_SECTIONS or label in PROHIBIT_SECTIONS:
+        if label in KNOWN_SECTIONS:
             sections.append((label, match.group(2).strip()))
         elif sections:
             prev_label, prev_body = sections[-1]
@@ -63,24 +87,37 @@ def split_material_sections(summary: str) -> tuple[list[tuple[str, list[str]]], 
 
     grouped: list[tuple[str, list[str]]] = []
     prohibitions: list[str] = []
+    reflection_parts: list[str] = []
     for label, body in sections:
+        if label in META_SECTIONS:
+            # 地名清单只备查：既不是事实，也不是禁止项
+            continue
+        if label in TITLE_SECTIONS:
+            continue
         if label in PROHIBIT_SECTIONS:
             # 禁止项按整句保留：切碎会丢掉「不得编造…」的限定词
             sentences = [s.strip(" ，,、") for s in _SENT_SPLIT.split(body) if s and s.strip()]
             prohibitions.extend(s for s in sentences if len(s) >= _MIN_FACT_LEN)
             continue
+        if label in REFLECTION_SECTIONS:
+            # 正向导向按句保留，不在逗号处切碎（它是一两句完整的引导语）
+            sentences = [s.strip(" ，,、") for s in _SENT_SPLIT.split(body) if s and s.strip()]
+            reflection_parts.extend(
+                s for s in sentences
+                if len(s) >= _MIN_FACT_LEN
+                and not any(meta in s for meta in _REFLECTION_META)
+            )
+            continue
         sentences = [s.strip(" ，,、") for s in _FACT_SPLIT.split(body) if s and s.strip()]
         sentences = [s for s in sentences if len(s) >= _MIN_FACT_LEN]
-        if label in TITLE_SECTIONS:
-            continue
         if sentences:
             grouped.append((label, sentences))
-    return grouped, prohibitions
+    return grouped, prohibitions, "；".join(reflection_parts)
 
 
 def split_material(summary: str) -> tuple[list[str], list[str]]:
-    """把梗概拆成 (事实句列表, 禁止项列表)。"""
-    grouped, prohibitions = split_material_sections(summary)
+    """把梗概拆成 (事实句列表, 禁止项列表)；读后思考不在这份清单里。"""
+    grouped, prohibitions, _ = split_material_sections(summary)
     facts: list[str] = []
     for _, sentences in grouped:
         facts.extend(sentences)
@@ -90,8 +127,9 @@ def split_material(summary: str) -> tuple[list[str], list[str]]:
 def assign_facts(grouped: list[tuple[str, list[str]]], para_count: int) -> list[list[str]]:
     """把事实摊到各段落上，返回每段对应的事实句。
 
-    素材的段落顺序本身就是叙事顺序（核心事实 → 背景意义 → 正向导向），
+    素材的段落顺序本身就是叙事顺序（核心事实 → 背景意义），
     所以按段分配：叙事事实占前面的段落，意义类事实自然落到结尾段。
+    正向导向已在上游剥离，末段不会再混进教育评论。
     """
     if para_count <= 0:
         return []

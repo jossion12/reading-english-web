@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from dataclasses import replace
@@ -37,6 +38,20 @@ class GenerationError(RuntimeError):
         self.message = message
         self.status_code = status_code
         self.detail = detail or {}
+
+
+#: 自检 issue 里中文段落残留的英文单词，形如「第1段中文残留英文单词「APEC」」
+_RESIDUE_RE = re.compile(r"中文残留英文单词「([A-Za-z]+)」")
+
+
+def _residue_words(issues: list[str]) -> list[str]:
+    """从自检 issue 里取出残留的英文单词（去重、保序）。"""
+    found: list[str] = []
+    for issue in issues or []:
+        for word in _RESIDUE_RE.findall(issue or ""):
+            if word not in found:
+                found.append(word)
+    return found
 
 
 class ArticleGenerator:
@@ -84,8 +99,9 @@ class ArticleGenerator:
                 detail={"field": "summary"},
             )
 
-        # 素材拆成事实句 + 禁止项：模型按「事实清单」写，编造空间被压到最小
-        sections, prohibitions = split_material_sections(summary)
+        # 素材拆成事实句 + 禁止项 + 读后思考：正向导向不进事实清单，
+        # 否则末段必然写成面向学生的教育评论（P0 语言修复 R3）
+        sections, prohibitions, reflection = split_material_sections(summary)
         facts = [fact for _, sentences in sections for fact in sentences]
 
         try:
@@ -97,6 +113,7 @@ class ArticleGenerator:
                 sub_theme=req.sub_theme,
                 sections=sections,
                 prohibitions=prohibitions,
+                reflection=reflection,
             )
         except PromptError as exc:
             raise GenerationError(f"Prompt 模板错误: {exc}", status_code=500) from exc
@@ -138,7 +155,8 @@ class ArticleGenerator:
                         + "## Your previous reply could not be parsed as JSON.\n"
                         + f"The parser said: {exc}\n"
                         + "Reply with ONE complete JSON object and nothing else. It must have "
-                        + "all four fields: title_en, title_cn, english_paras, chinese_paras. "
+                        + "all six fields: title_en, title_cn, english_paras, "
+                        + "chinese_paras, reflection_en, reflection_cn. "
                         + "Do not add any text before or after the JSON."
                     )
                     continue
@@ -214,6 +232,8 @@ class ArticleGenerator:
                 + (0 if rep.chinese_purity else 1)
                 + (0 if rep.no_fabrication else 1)
                 + (0 if rep.no_sensitive else 1)
+                + (0 if rep.natural_english else 1)
+                + (0 if rep.repetition_free else 1)
             )
             distance = abs(rep.word_count - (min_words + max_words) // 2)
             return (failed, 0 if rep.para_match else 1, distance)
@@ -225,6 +245,8 @@ class ArticleGenerator:
             title_cn=req.title_cn or parsed.title_cn,
             english_paras=parsed.english_paras,
             chinese_paras=parsed.chinese_paras,
+            reflection_en=parsed.reflection_en or None,
+            reflection_cn=parsed.reflection_cn or None,
             level=req.level,
             theme=req.theme,
             sub_theme=req.sub_theme,
@@ -304,6 +326,14 @@ class ArticleGenerator:
             "is_published": payload.get("is_published", False),
             "source_id": payload.get("source_id") or None,
         }
+        # 读后思考可空：常青文章和旧草稿没有该字段。未应用迁移的旧库也不认识
+        # 这两列（PostgREST 会回 PGRST204），只在确有值时写入，避免把
+        # 「preview → commit」整条链路卡在部署顺序上。
+        reflection_en = payload.get("reflection_en")
+        reflection_cn = payload.get("reflection_cn")
+        if reflection_en or reflection_cn:
+            row["reflection_en"] = reflection_en
+            row["reflection_cn"] = reflection_cn
 
         try:
             inserted = self.db.insert_article(row)
@@ -336,7 +366,7 @@ class ArticleGenerator:
         max_words: int,
         facts: list[str] | None = None,
     ) -> ValidationReport:
-        """LLM 二次校验：是否编造事实 / 是否含敏感内容 / 段落是否真的互为翻译。"""
+        """LLM 二次校验：编造事实 / 敏感内容 / 段落互译 / 地道英语 / 同义反复。"""
         last_error: Exception | None = None
         # 判官调用偶发失败（模型侧 500 / 截断）是可重试的，不该把整篇判死
         for attempt in range(self.SELF_CHECK_RETRIES):
@@ -403,7 +433,11 @@ class ArticleGenerator:
                 if group:
                     refs = ", ".join(f"F{index_of[fact]}" for fact in group)
                 else:
-                    refs = "restate the assigned facts from another angle"
+                    refs = (
+                        "no new fact of its own — close with the material's "
+                        "significance in plain English, without repeating an "
+                        "earlier sentence"
+                    )
                 lines.append(f"  - Paragraph {idx}: {refs}")
             lines.append(
                 "The F-list in the task above is the complete set of facts you may use. "
@@ -427,10 +461,10 @@ class ArticleGenerator:
                 + (f"It is {deficit} words short. " if deficit > 0 else
                    f"It is {report.word_count - max_words} words too long. ")
                 + ("Add more words, but only by unpacking what the material already "
-                   "says: split one material sentence into two, restate the same fact "
-                   "from the other side, walk through the same sequence step by step, or "
-                   "use the material's closing significance line. Do NOT add a new fact, "
-                   "name, place, number or reason. "
+                   "says: split one material sentence into two with each half adding "
+                   "something new, or walk through the same sequence step by step. "
+                   "Do NOT repeat a fact from another angle, do NOT use key words as "
+                   "filler, and do NOT add a new fact, name, place, number or reason."
                    if deficit > 0 else
                    f"Keep every paragraph between {self.prompts.para_min(level)} and "
                    f"{self.prompts.para_max(level)} words "
@@ -452,10 +486,23 @@ class ArticleGenerator:
                 "They MUST contain exactly the same number of elements, in the same order."
             )
         if not report.chinese_purity:
-            lines.append(
+            # 残留词必须点名：只说「用中文写」，模型不知道该动哪个词，
+            # 会照抄素材里的英文缩写（如 APEC）一轮轮不改。
+            residue = _residue_words(report.issues)
+            line = (
                 "- Some Chinese paragraphs still contain untranslated English words. "
                 "Write every Chinese paragraph in Chinese."
             )
+            if residue:
+                line += (
+                    " These Latin-script words appeared inside a Chinese paragraph and "
+                    "must not stay there: "
+                    + ", ".join(residue)
+                    + ". Write them in Chinese (an abbreviation becomes the full Chinese "
+                    "name, e.g. an organisation or a prize), or leave that detail out. "
+                    "Keep the Latin spelling only in the English paragraphs."
+                )
+            lines.append(line)
         if not report.no_fabrication:
             lines.append(
                 "- You added facts that are NOT in the material. Every noun, modifier, "
@@ -477,10 +524,13 @@ class ArticleGenerator:
                 "(not \"her school\")."
             )
             lines.append(
-                "- Keep every place name, school and number exactly as the material "
-                "writes it (黔东南 → QianDongNan or \"a mountainous area in the "
-                "province\"). If you are unsure of a name, describe it generically — "
-                "never invent one. Never write what did NOT happen (\"she did not stay "
+                "- Use the SHORTEST natural English form for place names: first mention "
+                "only the most specific level (Hedong Community), never a stack of "
+                "city + district + street + community; afterwards say 'the community'. "
+                "If a pinyin name is hard for a 12-year-old to read, describe it "
+                "generically ('a small town in Xinjiang') instead — never invent a name. "
+                "Keep other proper nouns and all numbers exactly as the material writes "
+                "them. Never write what did NOT happen (\"she did not stay "
                 "home that day\", \"no one helped her\"), never add a time qualifier "
                 "(\"today\", \"that day\"), never write \"news reports say\"."
             )
@@ -489,11 +539,28 @@ class ArticleGenerator:
                 "- The passage contains sensitive or negative content. "
                 "Rewrite it so it stays suitable for a 12-year-old reader."
             )
+        if not report.natural_english:
+            lines.append(
+                "- The checker found Chinglish or word-for-word translation. "
+                "Rewrite the quoted sentences in plain natural English, as a native "
+                "journalist would write them. Describe the concrete action instead of "
+                "official phraseology, and shorten stacked place names to the most "
+                "specific level only. Keep every fact unchanged — this is a wording "
+                "fix, not a content change."
+            )
+        if not report.repetition_free:
+            lines.append(
+                "- The checker found a sentence that repeats an earlier one. "
+                "Delete the quoted repeated sentence entirely. Do not replace it with "
+                "another restatement; it is fine if the passage ends up shorter."
+            )
         # 判官指出的具体问题必须回喂给模型 —— 只给通用规则它改不对
         generic = (
             "LLM 复核判定存在梗概以外的编造事实",
             "LLM 复核判定包含敏感或负面内容",
             "LLM 复核判定中英段落数不一致",
+            "LLM 复核判定存在中式英语或回译腔",
+            "LLM 复核判定存在同义反复",
         )
         detailed = [
             i

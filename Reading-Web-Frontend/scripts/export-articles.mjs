@@ -20,9 +20,13 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "dist");
 
-const COLUMNS =
+const COMMON_COLUMNS =
   "id,publish_date,title_en,title_cn,level,theme,sub_theme,style,color_tag," +
-  "english_paras,chinese_paras,sort,is_published,source_id";
+  "english_paras,chinese_paras";
+const TAIL_COLUMNS = "sort,is_published,source_id";
+// P0 R6：读后思考两列必须进快照，否则国内学生首屏看不到折叠区。
+const COLUMNS = `${COMMON_COLUMNS},reflection_en,reflection_cn,${TAIL_COLUMNS}`;
+const LEGACY_COLUMNS = `${COMMON_COLUMNS},${TAIL_COLUMNS}`;
 const PAGE_SIZE = 1000;
 
 /** Windows 上用 PowerShell 管道写配置容易带 U+FEFF，统一清掉。 */
@@ -53,17 +57,11 @@ function readEnv() {
   return { url, key };
 }
 
-async function main() {
-  const { url, key } = readEnv();
-  if (!url || !key) {
-    console.warn("[export-articles] 未配置 Supabase 只读变量，跳过快照（前端将直连 Supabase）");
-    return;
-  }
-
-  // 逗号在 query 里是合法分隔符，不编码，PostgREST 原样解析 select / 多列 order。
+/** 逗号在 query 里是合法分隔符，不编码，PostgREST 原样解析 select / 多列 order。 */
+async function requestArticles(url, key, columns) {
   const endpoint =
     `${url.replace(/\/+$/, "")}/rest/v1/articles` +
-    `?select=${COLUMNS}&is_published=eq.true` +
+    `?select=${columns}&is_published=eq.true` +
     `&order=publish_date.desc,sort.asc&limit=${PAGE_SIZE}`;
 
   const resp = await fetch(endpoint, {
@@ -75,6 +73,27 @@ async function main() {
   }
   const rows = await resp.json();
   if (!Array.isArray(rows)) throw new Error("Supabase 返回的不是数组");
+  return rows;
+}
+
+async function main() {
+  const { url, key } = readEnv();
+  if (!url || !key) {
+    console.warn("[export-articles] 未配置 Supabase 只读变量，跳过快照（前端将直连 Supabase）");
+    return;
+  }
+
+  let rows;
+  try {
+    rows = await requestArticles(url, key, COLUMNS);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // 生产库还没应用 R5 迁移时，PostgREST 因未知列回 400 / PGRST204。
+    // 降级按旧字段导出，首屏仍能出快照，不至于代码先上、迁移后做就整站归零。
+    if (!/reflection|PGRST204|column|42703|HTTP 400|HTTP 404/i.test(message)) throw err;
+    console.warn("[export-articles] 线上库尚无 reflection 两列，按旧字段导出；请先应用 R5 迁移");
+    rows = await requestArticles(url, key, LEGACY_COLUMNS);
+  }
 
   const published = rows.filter((row) => row && row.is_published === true);
   writeFileSync(join(dist, "articles.json"), JSON.stringify(published), "utf8");

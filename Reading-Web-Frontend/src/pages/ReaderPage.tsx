@@ -145,6 +145,10 @@ export function ReaderPage() {
 
   const favorite = isFavorite(article.id);
   const level = levelMeta(article.level);
+  // 读后思考是 P0 之后才有的字段：存量文章没有，整个折叠区都不渲染（R6）。
+  const hasReflection = Boolean(
+    article.reflection_en?.trim() || article.reflection_cn?.trim(),
+  );
 
   const cls = (side: "en" | "cn", active: boolean, linked: boolean) =>
     [
@@ -264,6 +268,20 @@ export function ReaderPage() {
             );
           })}
         </div>
+
+        {hasReflection ? (
+          <details className="reflection">
+            <summary className="reflection-toggle">💭 读后思考</summary>
+            <div className="reflection-body">
+              {article.reflection_en?.trim() ? (
+                <p className="reflection-en">{article.reflection_en}</p>
+              ) : null}
+              {article.reflection_cn?.trim() ? (
+                <p className="reflection-cn">{article.reflection_cn}</p>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
 
         <footer className="reader-foot">
           <Link to="/" className="link-btn">

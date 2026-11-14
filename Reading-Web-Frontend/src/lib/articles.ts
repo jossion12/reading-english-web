@@ -15,7 +15,8 @@ const PAGE_SIZE = 1000;
 
 const COLUMNS =
   "id,publish_date,title_en,title_cn,level,theme,sub_theme,style,color_tag," +
-  "english_paras,chinese_paras,sort,is_published,source_id";
+  "english_paras,chinese_paras,reflection_en,reflection_cn," +
+  "sort,is_published,source_id";
 
 /** 后台增强最多等这么久，不能让一次注定失败的外网请求拖住页面。 */
 const LIVE_TIMEOUT_MS = 6000;

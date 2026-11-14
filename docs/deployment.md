@@ -99,6 +99,14 @@ Project Settings → SQL Editor → 新建查询，把
 
 迁移会建两张表 `source_log` / `articles`、索引、外键，以及 RLS 策略 —— 严格两表，没有第三张。
 
+> **P0 语言修复后的新增迁移**：`supabase/migrations/20261114173000_add_article_reflection.sql`
+> 给 `articles` 加 `reflection_en` / `reflection_cn` 两列（读后思考，可空，RLS 不变）。
+> 存量项目再跑一次 `supabase db push`（方式 A）或重贴一次 `online_setup.sql`（方式 B，幂等）即可。
+> **顺序：先给生产库加列，再推前端 / 重新生成文章。** 否则生成服务写入新字段会被
+> PostgREST 以 `PGRST204` 拒绝；构建期快照导出会 400（导出脚本会自动降级按旧字段
+> 出快照并告警，站点不会归零，但读后思考不会出现）。
+> `check_prod_connectivity.py` 已加「articles 读后思考列」检查项，上线前会直接点名。
+
 > **灌完表一定要验证**：在线库没建表时，REST 会返回 `PGRST205 Could not find the table`，
 > 前端会一片空白。跑一次 `py -3.12 scripts/check_prod_connectivity.py` 即可确认。
 

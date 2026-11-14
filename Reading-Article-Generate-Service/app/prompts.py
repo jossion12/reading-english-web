@@ -139,8 +139,8 @@ class PromptLibrary:
         return split_material(summary or "")
 
     def material_sections(self, summary: str) -> list[tuple[str, list[str]]]:
-        """把梗概按段拆开（标签 + 该段的事实句）。"""
-        grouped, _ = split_material_sections(summary or "")
+        """把梗概按段拆开（标签 + 该段的事实句）；读后思考不在这份清单里。"""
+        grouped, _, _ = split_material_sections(summary or "")
         return grouped
 
     @staticmethod
@@ -160,7 +160,10 @@ class PromptLibrary:
             if group:
                 refs = ", ".join(f"F{index_of[fact]}" for fact in group)
             else:
-                refs = "no fact of its own — restate the assigned facts from another angle"
+                refs = (
+                    "no new fact of its own — close with the material's significance "
+                    "in plain English, without repeating an earlier sentence"
+                )
             lines.append(f"- Paragraph {idx} (English + Chinese): {refs}")
         return "\n    ".join(lines)
 
@@ -181,17 +184,26 @@ class PromptLibrary:
         sub_theme: str = "",
         sections: list[tuple[str, list[str]]] | None = None,
         prohibitions: list[str] | None = None,
+        reflection: str | None = None,
     ) -> tuple[str, str]:
-        """返回 (system_prompt, user_prompt)。"""
+        """返回 (system_prompt, user_prompt)。
+
+        reflection 是梗概里的「正向导向」原文，只渲染进 Student reflection 一节，
+        不参与事实清单与逐段派活（P0 语言修复 R3）。
+        """
         cfg = self.level_config(level)
         min_words, max_words = self.word_range(level)
         level_instruction = str(cfg.get("instruction", "")).strip()
-        if sections is None:
-            sections, auto_prohibitions = split_material_sections(summary or "")
+        if sections is None or prohibitions is None or reflection is None:
+            auto_sections, auto_prohibitions, auto_reflection = split_material_sections(
+                summary or ""
+            )
+            if sections is None:
+                sections = auto_sections
             if prohibitions is None:
                 prohibitions = auto_prohibitions
-        if prohibitions is None:
-            prohibitions = []
+            if reflection is None:
+                reflection = auto_reflection
         facts: list[str] = [fact for _, sentences in sections for fact in sentences]
         assignment = assign_facts(sections, self.para_count(level))
         values = {
@@ -211,7 +223,8 @@ class PromptLibrary:
             "sent_label": self.sent_label(level),
             "fact_list": self._fact_list(facts),
             "para_assignment": self._para_assignment(assignment, facts),
-            "prohibition_list": self._prohibition_list(prohibitions),
+            "prohibition_list": self._prohibition_list(prohibitions or []),
+            "reflection": reflection or "（素材没有提供正向导向，reflection_en / reflection_cn 填空字符串）",
         }
 
         if evergreen:

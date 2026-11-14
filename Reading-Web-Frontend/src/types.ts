@@ -11,6 +11,9 @@ export interface Article {
   color_tag: string;
   english_paras: string[];
   chinese_paras: string[];
+  /** 读后思考（P0 R5）：与正文分离展示；存量文章没有这两列，可为 null / 缺失。 */
+  reflection_en?: string | null;
+  reflection_cn?: string | null;
   sort: number;
   is_published: boolean;
   source_id: string | null;

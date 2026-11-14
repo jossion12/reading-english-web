@@ -146,6 +146,37 @@ def test_parse_summary_fields() -> None:
     assert summary.to_text().startswith("新闻标题：")
 
 
+def test_parse_summary_keeps_place_names_line() -> None:
+    """P0 R1：地名清单是第 6 行，必须原样进 source_summary，不能被丢进 extra。"""
+    raw = (
+        "新闻标题：社区志愿者清扫街道\n"
+        "核心事实：河东社区的志愿者清扫了街道。\n"
+        "背景意义：社区环境更整洁了。\n"
+        "正向导向：引导学生参与身边的公益。此字段仅供读后思考使用，绝不进入阅读正文。\n"
+        "地名清单：河东社区；上级行政层级略\n"
+        "禁止加入内容：具体人名、补助金额。\n"
+    )
+    summary = parse_summary(raw)
+    assert "河东社区" in summary.place_names
+    assert "地名清单：河东社区" in summary.to_dict()["text"]
+    # 6 行结构：地名清单排在正向导向之后、禁止加入内容之前
+    lines = summary.to_text().splitlines()
+    assert lines[3].startswith("正向导向：")
+    assert lines[4].startswith("地名清单：")
+    assert lines[5].startswith("禁止加入内容：")
+    assert summary.to_dict()["place_names"] == summary.place_names
+
+
+def test_parse_summary_legacy_five_lines_gets_placeholder() -> None:
+    """存量 5 行梗概没有地名清单，也要补成 6 行，下游拆分不分两套。"""
+    summary = parse_summary(
+        "新闻标题：测试\n核心事实：内容内容内容。\n背景意义：意义意义意义。\n"
+        "正向导向：引导引导学生。\n禁止加入内容：不得编造姓名。\n"
+    )
+    assert summary.place_names == ""
+    assert "地名清单：略" in summary.to_text()
+
+
 def test_parse_summary_detects_negative() -> None:
     raw = (
         "新闻标题：某地火灾\n"

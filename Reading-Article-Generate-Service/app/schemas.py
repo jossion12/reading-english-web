@@ -62,6 +62,9 @@ class ArticlePayload(BaseModel):
     title_cn: str
     english_paras: list[str]
     chinese_paras: list[str]
+    #: 读后思考，与正文分离（P0 R5）。常青文章与存量草稿可为空。
+    reflection_en: str | None = None
+    reflection_cn: str | None = None
     level: Level
     theme: str
     sub_theme: str = ""

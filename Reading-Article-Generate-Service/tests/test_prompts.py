@@ -99,3 +99,69 @@ def test_rewrite_feedback_names_actual_paragraph_count() -> None:
     feedback = gen._rewrite_feedback(report, 120, 180, "L2")
     assert "You wrote 2 paragraphs" in feedback
     assert "3-5 paragraphs" in feedback
+
+
+# ------------------------------------------------------------- P0 语言质量 ---
+def test_expansion_has_voice_rules_and_no_padding_permission(library: PromptLibrary) -> None:
+    """R2：地道英语硬规则在，两条注水合法化条款必须删除。"""
+    _, user = library.render_expansion(summary="素材梗概正文", level="L3")
+    assert "Voice and style (hard rules" in user
+    assert "native-English journalist" in user
+    assert "Never say the same thing twice" in user
+    assert "SHORTEST natural English form for every place name" in user
+    assert "Never address the reader directly" in user
+    # 根因 A 的两条注水条款，以及正文段落里的同义反复许可
+    assert "Restate the same fact from the other side" not in user
+    assert "Repeat the material's own key words" not in user
+    assert "restate the same fact in different words" not in user
+    assert "restate the assigned facts from another angle" not in user
+
+
+def test_expansion_output_format_has_reflection_fields(library: PromptLibrary) -> None:
+    _, user = library.render_expansion(summary="素材梗概正文", level="L2")
+    assert '"reflection_en"' in user
+    assert '"reflection_cn"' in user
+    assert "Student reflection" in user
+
+
+def test_expansion_renders_reflection_from_summary(library: PromptLibrary) -> None:
+    """R3：正向导向原文渲染进 Student reflection 一节，占位符不残留。"""
+    summary = (
+        "新闻标题：社区志愿者清扫街道\n"
+        "核心事实：河东社区的志愿者清扫了街道。\n"
+        "背景意义：社区环境更整洁。\n"
+        "正向导向：引导初一学生关心身边的人和事。\n"
+        "地名清单：河东社区\n"
+        "禁止加入内容：不得编造具体人名。\n"
+    )
+    _, user = library.render_expansion(summary=summary, level="L2", reflection=None)
+    assert "关心身边的人和事" in user
+    assert "Student reflection" in user
+    assert "{{" not in user
+    # 正向导向不能出现在事实清单（F 编号那一段）里
+    fact_block = user.split("## Your job")[1].split("## Forbidden")[0]
+    assert "关心身边的人和事" not in fact_block
+
+
+def test_evergreen_also_has_voice_rules(library: PromptLibrary) -> None:
+    _, user = library.render_expansion(summary="", level="L1", evergreen=True, theme="人与自然")
+    assert "Voice and style (hard rules" in user
+    assert "Never say the same thing twice" in user
+    assert "{{" not in user
+
+
+def test_self_check_has_language_dimensions(library: PromptLibrary) -> None:
+    system, user = library.render_self_check(
+        summary="梗概",
+        level="L2",
+        title_en="EN",
+        title_cn="CN",
+        english_paras=["one"],
+        chinese_paras=["一"],
+    )
+    assert "native-English-speaking junior-high reading teacher" in system
+    assert "5. natural_english" in user
+    assert "6. no_repetition" in user
+    assert '"natural_english": true' in user
+    assert '"repetition_free": true' in user
+    assert "{{" not in user

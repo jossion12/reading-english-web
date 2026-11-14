@@ -86,6 +86,28 @@ def check_supabase(env: dict[str, str]) -> list[tuple[bool, str, str]]:
     else:
         results.append((False, "anon 读 articles", f"HTTP {resp.status_code} {resp.text[:160]}"))
 
+    # 1b) P0 R5：读后思考两列在不在。没应用新迁移时 PostgREST 会回
+    # 400 / PGRST204，此时前端快照只能按旧字段导出、新字段永远写不进库。
+    try:
+        resp = httpx.get(
+            f"{base}/rest/v1/articles",
+            headers={"apikey": anon, "Authorization": f"Bearer {anon}"},
+            params={"select": "reflection_en,reflection_cn", "limit": 1},
+            timeout=20,
+        )
+        if resp.status_code == 200:
+            results.append((True, "articles 读后思考列", "reflection_en / reflection_cn 已存在"))
+        else:
+            results.append(
+                (
+                    False,
+                    "articles 读后思考列",
+                    "缺列 —— 先应用迁移 20261114173000_add_article_reflection.sql（supabase db push）",
+                )
+            )
+    except httpx.HTTPError as exc:
+        results.append((False, "articles 读后思考列", f"连不上：{exc}"))
+
     # 2) RLS：anon 不该能读 source_log
     try:
         resp = httpx.get(

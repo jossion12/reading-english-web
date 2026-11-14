@@ -2,7 +2,8 @@
 
 分两层：
   1. 确定性校验（代码判定）：英文词数是否落在难度区间、中英段落数是否一致、段落数是否合理。
-  2. 语义校验（LLM 二次校验）：是否编造事实、是否含敏感负面内容。
+  2. 语义校验（LLM 二次校验）：是否编造事实、是否含敏感负面内容、语言是否地道、
+     有无同义反复、段落是否真的互为翻译。
 """
 
 from __future__ import annotations
@@ -12,14 +13,32 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-_WORD_RE = re.compile(r"[A-Za-z]+(?:['\-][A-Za-z]+)*")
+_WORD_RE = re.compile(r"[A-Za-z]+(?:['\-][A-Za-z]+)*|\d+(?:[.,]\d+)*")
 # 中文段落里残留的英文单词（3 个字母以上才算，避免 CCTV / AI 这类缩写误报）
 _ASCII_WORD_RE = re.compile(r"[A-Za-z]{3,}")
 
 
 def count_words(text: str) -> int:
-    """统计英文词数：'don't' / 'well-known' 各算一个词。"""
+    """统计英文词数：'don't' / 'well-known' 各算一个词，数字（2026 / 10,000）也算一个词。
+
+    数字计词是为了跟两处口径对齐：难度区间（L1/L2/L3）是照中考 B/C/D 篇定的，
+    中考计数里「2026」「10,000」都占一个词；前端展示词数用的也是含数字的口径。
+    只数字母会让带年份、带数字的稿件在自检里「看起来达标」，实际却超出难度区间。
+    """
     return len(_WORD_RE.findall(text or ""))
+
+
+def _flag(value: Any, *, default: bool = True) -> bool:
+    """把判官返回的布尔位读成 bool。
+
+    判官偶尔把 true/false 写成字符串（"false"），直接 bool("false") 会得到 True，
+    把不合格稿件放过去，所以显式认这几种写法。缺省视为通过，兼容旧日志。
+    """
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() not in ("false", "no", "0", "f")
+    return bool(value)
 
 
 class ValidationReport(BaseModel):
@@ -35,6 +54,10 @@ class ValidationReport(BaseModel):
     no_fabrication: bool = True
     para_match: bool = True
     no_sensitive: bool = True
+    #: LLM 判官：是否地道英文（非中式英语 / 回译腔 / 公文直译 / 地名堆叠）
+    natural_english: bool = True
+    #: LLM 判官：是否无同义反复句
+    repetition_free: bool = True
     issues: list[str] = Field(default_factory=list)
     #: 中文段落里是否残留未翻译的英文单词
     chinese_purity: bool = True
@@ -58,6 +81,8 @@ class ValidationReport(BaseModel):
             and self.no_fabrication
             and self.para_match
             and self.no_sensitive
+            and self.natural_english
+            and self.repetition_free
             and self.chinese_purity
             and self.para_count_ok
             and not self.issues
@@ -70,6 +95,8 @@ class ValidationReport(BaseModel):
             "no_fabrication": self.no_fabrication,
             "para_match": self.para_match,
             "no_sensitive": self.no_sensitive,
+            "natural_english": self.natural_english,
+            "repetition_free": self.repetition_free,
             "chinese_purity": self.chinese_purity,
             "para_count": self.para_count,
             "para_count_ok": self.para_count_ok,
@@ -141,7 +168,9 @@ def merge_llm_check(
 
     词数以**代码计数**为准：LLM 自检自报的数字常常少算十几个词，若采信它会把
     合格稿件误判为不合格。因此 LLM 的词数只作参考记录，不参与判定。
-    LLM 负责它真正擅长的三项：是否编造事实、段落是否真的互为翻译、是否含敏感内容。
+    LLM 负责语义项：编造事实、段落是否互为翻译、敏感内容，以及 P0 新增的
+    natural_english / repetition_free 两个语言质量维度。旧日志与旧版判官响应里
+    没有这两个键时缺省视为通过，不会把历史草稿判死。
     """
     llm_word_count = llm_result.get("word_count")
     if isinstance(llm_word_count, (int, float)) and int(llm_word_count) > 0:
@@ -153,8 +182,14 @@ def merge_llm_check(
             f"英文词数 {base.word_count} 不在难度区间 {min_words}-{max_words} 之内"
         )
 
-    base.no_fabrication = bool(llm_result.get("no_fabrication", True))
-    base.no_sensitive = bool(llm_result.get("no_sensitive", True))
+    base.no_fabrication = _flag(llm_result.get("no_fabrication"))
+    base.no_sensitive = _flag(llm_result.get("no_sensitive"))
+    base.natural_english = _flag(llm_result.get("natural_english"))
+    # 检查项名叫 no_repetition，输出字段叫 repetition_free —— 两个名字都认，
+    # 判官按哪个回都不至于漏判。
+    base.repetition_free = _flag(
+        llm_result.get("repetition_free", llm_result.get("no_repetition"))
+    )
     if llm_result.get("para_match") is False:
         base.para_match = False
         if not any("段落数不一致" in i for i in base.issues):
@@ -164,6 +199,10 @@ def merge_llm_check(
         base.issues.append("LLM 复核判定存在梗概以外的编造事实")
     if not base.no_sensitive:
         base.issues.append("LLM 复核判定包含敏感或负面内容")
+    if not base.natural_english:
+        base.issues.append("LLM 复核判定存在中式英语或回译腔")
+    if not base.repetition_free:
+        base.issues.append("LLM 复核判定存在同义反复")
 
     for issue in llm_result.get("issues") or []:
         text = str(issue).strip()
