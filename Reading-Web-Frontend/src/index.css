@@ -451,6 +451,41 @@ button {
   gap: 12px;
 }
 
+/* 滚动到底的加载哨兵：留出高度让 IntersectionObserver 提前触发，文字保持低调 */
+.load-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 20px 12px 8px;
+}
+
+.load-more {
+  color: var(--ink-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.load-more-hint::before {
+  content: "↓";
+  margin-right: 7px;
+  opacity: 0.6;
+}
+
+.load-more-btn {
+  margin-left: 12px;
+  font-size: 13px;
+}
+
+.load-more-end {
+  opacity: 0.75;
+  letter-spacing: 0.05em;
+}
+
+.load-more-err {
+  color: var(--cinnabar-deep);
+}
+
 .card {
   position: relative;
   display: flex;

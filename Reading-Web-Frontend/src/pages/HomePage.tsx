@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BottomSheet } from "../components/BottomSheet";
 import { Calendar } from "../components/Calendar";
@@ -14,7 +14,18 @@ import type { Filters } from "../types";
 const EMPTY_FILTERS: Filters = { themes: [], levels: [], styles: [] };
 
 export function HomePage() {
-  const { articles, loading, error, reload } = useArticles();
+  const {
+    dates,
+    articles,
+    loading,
+    loadingMore,
+    error,
+    moreError,
+    hasMore,
+    reload,
+    loadMore,
+    ensureDate,
+  } = useArticles();
   const { isFavorite, toggle } = useFavorites();
   const [params, setParams] = useSearchParams();
 
@@ -28,6 +39,8 @@ export function HomePage() {
     if (date) next.set("date", date);
     else next.delete("date");
     setParams(next, { replace: true });
+    // 日历可能选到「还没滚动加载到」的更早日期，先把它补拉回来
+    if (date) void ensureDate(date);
   };
 
   const available = useMemo(() => {
@@ -46,12 +59,8 @@ export function HomePage() {
     };
   }, [articles]);
 
-  /** 只标记有文章的日期（PRD §2.1）。 */
-  const activeDates = useMemo(() => {
-    const set = new Set<string>();
-    for (const a of articles) set.add(a.publish_date);
-    return set;
-  }, [articles]);
+  /** 只标记有文章的日期（PRD §2.1）。日期来自完整 index，不受「只加载了部分分片」影响。 */
+  const activeDates = useMemo(() => new Set(dates), [dates]);
 
   const filtered = useMemo(() => {
     return articles.filter((a) => {
@@ -63,9 +72,43 @@ export function HomePage() {
     });
   }, [articles, selectedDate, filters]);
 
+  // 列表底部哨兵：只有「用户滚动过」之后进入视口才加载下一个更早日期的分片。
+  // 首屏首次渲染时哨兵可能因内容不足一屏而可见，此时绝不自动加载 —— 严格保证
+  // 首屏只请求今日数据（加载时效）。筛选/选中日期时也不自动加载。
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasScrolled = useRef(false);
+  const canAutoLoad = !selectedDate && activeFilterCount(filters) === 0 && !loading && !error;
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (window.scrollY > 40) hasScrolled.current = true;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore || !canAutoLoad) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        // 没滚动过就不触发：避免首屏内容不足一屏时连锁预加载多天
+        if (hasScrolled.current && entries.some((e) => e.isIntersecting)) void loadMore();
+      },
+      { rootMargin: "0px" },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [hasMore, canAutoLoad, loadMore]);
+
   useEffect(() => {
     document.title = "英语泛读 · 首页";
   }, []);
+
+  // 深链带 ?date= 时，确保该日期分片已加载
+  useEffect(() => {
+    if (selectedDate) void ensureDate(selectedDate);
+  }, [selectedDate, ensureDate]);
 
   const toggleLevel = (level: string) => {
     setFilters((prev) => ({
@@ -75,9 +118,6 @@ export function HomePage() {
         : [...prev.levels, level],
     }));
   };
-
-  const activeFilterCount =
-    filters.themes.length + filters.levels.length + filters.styles.length;
 
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
@@ -141,7 +181,7 @@ export function HomePage() {
         >
           <SlidersIcon />
           筛选
-          {activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          {activeFilterCount(filters) > 0 ? ` (${activeFilterCount(filters)})` : ""}
         </button>
 
         {selectedDate ? (
@@ -207,6 +247,31 @@ export function HomePage() {
         ))}
       </div>
 
+      {/* 滚动到底的加载哨兵 + 状态提示（仅在无筛选的浏览态出现） */}
+      {canAutoLoad && filtered.length > 0 ? (
+        <div ref={sentinelRef} className="load-sentinel" aria-live="polite">
+          {loadingMore ? (
+            <span className="load-more">正在加载更早的文章…</span>
+          ) : moreError ? (
+            <span className="load-more load-more-err">
+              加载失败：{moreError}
+              <button type="button" className="link-btn" onClick={() => void loadMore()}>
+                重试
+              </button>
+            </span>
+          ) : hasMore ? (
+            <span className="load-more load-more-hint">
+              向下滚动，阅读更早的文章
+              <button type="button" className="link-btn load-more-btn" onClick={() => void loadMore()}>
+                加载更多
+              </button>
+            </span>
+          ) : (
+            <span className="load-more load-more-end">— 已经到底啦 —</span>
+          )}
+        </div>
+      ) : null}
+
       <BottomSheet
         open={calendarOpen}
         title="按日期找文章"
@@ -233,4 +298,9 @@ export function HomePage() {
       </BottomSheet>
     </div>
   );
+}
+
+/** 筛选是否处于激活态（抽成纯函数，供 IntersectionObserver 依赖判断）。 */
+function activeFilterCount(filters: Filters): number {
+  return filters.themes.length + filters.levels.length + filters.styles.length;
 }

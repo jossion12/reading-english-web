@@ -6,6 +6,12 @@
  * 整个阅读站 0 篇。把文章在 CI 构建时用 anon 密钥拉一次、随站点一起发布，
  * 浏览器就只需请求同域静态文件；Supabase 退为「能连上时」的后台增强。
  *
+ * 产物（都在 dist/）：
+ *   - articles.json           全量已发布文章，供阅读页深链按 id 兜底 + 向后兼容
+ *   - articles-index.json     有文章的日期数组（倒序），首屏第一个请求，极小
+ *   - articles-<date>.json    每天一个分片，滚动到对应日期才请求
+ * 首屏只拉 index + 最新一天分片，避免一次性下载全量；这正是「加载时效」优化。
+ *
  * 只用 VITE_SUPABASE_ANON_KEY（publishable / anon，RLS 只允许读已发布文章），
  * 绝不引入 service_role。写出的 JSON 与 articles 表的公开字段一一对应。
  *
@@ -13,7 +19,7 @@
  * 导出失败只警告不抛错（本地开发不该被网络拖垮），CI 由 workflow 的
  * 「校验文章快照」步骤兜住，避免部署出没有快照的坏版本。
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -96,8 +102,33 @@ async function main() {
   }
 
   const published = rows.filter((row) => row && row.is_published === true);
+  // 全量文件保留两用途：① 阅读页深链按 id 查找的快照兜底；② 老版本前端的向后兼容。
   writeFileSync(join(dist, "articles.json"), JSON.stringify(published), "utf8");
-  console.log(`[export-articles] 已写入 dist/articles.json（${published.length} 篇已发布文章）`);
+
+  // 首屏只拉「最新一天」+ 一个极小的日期索引；更早的日期等滚动到列表底部再按需取。
+  // Supabase 查询已是 publish_date.desc, sort.asc，这里分组时保持该顺序：
+  //   dates 数组按日期倒序，每个分片内按 sort 升序。
+  const byDate = new Map();
+  for (const row of published) {
+    const date = row.publish_date;
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(row);
+  }
+  const dates = [...byDate.keys()]; // Map 保序 → 已是日期倒序
+
+  // 清理上一次构建残留的旧分片（某天文章全部下架时，旧文件不该继续留在产物里）。
+  for (const name of readdirSync(dist)) {
+    if (/^articles-\d{4}-\d{2}-\d{2}\.json$/.test(name)) unlinkSync(join(dist, name));
+  }
+
+  writeFileSync(join(dist, "articles-index.json"), JSON.stringify(dates), "utf8");
+  for (const [date, items] of byDate) {
+    writeFileSync(join(dist, `articles-${date}.json`), JSON.stringify(items), "utf8");
+  }
+  console.log(
+    `[export-articles] 已写入 dist/articles.json（全量 ${published.length} 篇）+ ` +
+      `articles-index.json（${dates.length} 个日期）+ ${dates.length} 个按日期分片`,
+  );
 }
 
 main().catch((err) => {
